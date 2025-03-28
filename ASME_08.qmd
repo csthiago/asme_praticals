@@ -1,0 +1,237 @@
+---
+title: "Cox Regression"
+author: "Thiago Cerqueira Silva"
+subtitle: "Adaptaded from Andrea Mazzella codes"
+format: 
+  html: 
+    toc: true
+    toc-location: left
+    self-contained: true
+    code-fold: true
+    code-summary: "Show the code"
+execute: 
+  warning: false
+  message: false
+editor: visual
+---
+
+
+```{r}
+# read "dta" files
+library(haven) 
+# create table
+library(gtsummary)
+# data wrangling and other functions
+library(tidyverse)
+# if you want to have a output similar to stata
+library(tidylog)
+#cox
+library(survival)
+# Limit significant digits to 2, remove scientific notation
+options(digits = 2, scipen = 9)
+```
+
+# Trinidad
+
+## 1. Data manipulation
+
+Read in dataset trinmlsh.dta. This contains data from a cohort study on cardiovascular risk factors and mortality among \~300 men from Trinidad.
+
+```{r}
+# Import the dataset
+trin <- read_dta("TRINMLSH.DTA")
+trin <- trin |> 
+  mutate(
+    ethgp = factor(ethgp,
+                      levels = c(1:5),
+                      labels = c("African", "Indian", "European", "mixed", "Chin/Sem")),
+    alc = factor(alc,
+                      levels = c(0:3),
+                      labels = c("none", "1-4/wk", "5-14/wk", ">=15/wk")),
+    smoke3 = case_when(
+      smokenum == 0 ~ "non-smok",
+      smokenum == 1 ~ "ex-smok",
+      !is.na(smokenum) ~ "smoker"
+    ),
+    smoke3 = fct_relevel(smoke3, "non-smok"),
+    smokenum = factor(smokenum,
+                      levels = c(0:5),
+                      labels = c("non-smok", "ex-smok", "1-9/d", "10-19/d", "20-29/d", ">=30/d")),
+    chdstart = factor(chdstart,
+                      levels = c(0, 1),
+                      labels = c("no", "yes")
+    ))
+```
+
+## 2
+Examine the effect of smoking on all-cause mortality using strate (or stptime if you
+prefer) and stcox. You may wish to recode smokenum into a smaller number of categories,
+say: 0=non-smoker, 1=ex-smoker, 2=current smoker.
+
+We can now examine the smoking-specific mortality rates (per 1,000 person-years). Let's first use the classical technique and then let's use Cox regression.
+
+```{r, results = "asis"}
+# Now create a survival object to assess all-cause mortality, coded as `death`. Note that Surv() can take time data in two different formats: either a combination of data of entry and data of exit (like in session 7), or as a time difference. In this case, `years` codes this time difference, so we'll use it.
+# Calculate rates
+pyears(Surv(time = years, event=death) ~ smoke3, data = trin, scale = 1) %>%
+  summary(n = F, rate = T, ci.r = T, scale = 1000)
+```
+
+
+# Q3 
+Re-examine Question 1 and Question 2 using attained age as the time-scale. Is the proportionality assumption valid? What are the problems with assessing proportionality using graphical methods when using age as the time-scale?
+
+-   N is the size of the group
+-   Event N is the number of events in that group
+
+```{r}
+# Create Cox model
+cox_smok3 <- coxph(Surv(time = years, event=death) ~ smoke3, data = trin)
+
+# Calculating 95% CIs for HRs
+tbl_regression(cox_smok3, exponentiate = T) |> 
+  add_n(location="level") |> 
+  add_nevent(location="level")
+```
+```{r}
+# Create Cox model
+cox_smok3 <- coxph(Surv(time = years, event=death) ~ as.numeric(smoke3), data = trin)
+
+# Calculating 95% CIs for HRs
+tbl_regression(cox_smok3, exponentiate = T) |> 
+  add_n(location="level") |> 
+  add_nevent(location="level")
+```
+
+
+
+```{r}
+# Survival object set for current age
+# Cox using the timeage as the time 
+cox_smok3_age <- coxph(Surv(time=as.numeric(timein),time2=as.numeric(timeout),
+                             event = death,
+                             origin = as.numeric(timebth)) ~ smoke3, data = trin)
+
+tbl_regression(cox_smok3_age, exponentiate = T) |> 
+  add_n(location="level") |> 
+  add_nevent(location="level")
+```
+
+```{r}
+# Read in the pbc1bas.dta dataset 
+pbc <- read_dta("PBC1BAS.DTA")
+
+# Data management
+pbc<- pbc |> mutate(death = d,
+               treat = factor(treat, levels = c(1, 2), labels = c("placebo", "azath")),
+               cenc0 = factor(cenc0, levels = c(0, 1), labels = c("no", "yes")),
+               cir0 = factor(cir0, levels = c(0, 1), labels = c("no", "yes")),
+               gh0 = factor(gh0, levels = c(0, 1), labels = c("no", "yes")),
+               asc0 = factor(asc0, levels = c(0, 1), labels = c("no", "yes"))) |> 
+         select(-d)
+```
+
+
+```{r}
+# Poisson model
+mod_pois <- glm(death ~ offset(log(time)) + treat + logb0, family = poisson(), data = pbc) 
+
+tbl_pois <- tbl_regression(mod_pois,exponentiate = T)
+
+# Cox model
+mod_cox <- coxph(Surv(time,death) ~ treat + logb0, data = pbc)
+tbl_cox <- tbl_regression(mod_cox,exponentiate = T)
+tbl_merge(list(tbl_pois,tbl_cox))
+exp(confint(cox_bilir))
+```
+
+
+```{r}
+# Split the survival object
+pbc_split <- survSplit(Surv(time,death) ~ .,
+                       data = pbc,
+                       cut = c(2, 4, 6),
+                       episode = "period",
+                       start = "tstart",
+                       end = "tstop")
+
+# Fix age and create follow-up by band
+pbc_split <- pbc_split |> 
+  mutate(
+    age = age + tstart,
+    t_fup = tstop - tstart
+  )
+
+
+# Factorise variable and label values
+pbc_split$period <- factor(pbc_split$period,
+                           levels = c(1, 2, 3, 4),
+                           labels = c("0-2y", "2-4y", "4-6y", "6-12y"))
+glm(death ~ offset(log(t_fup)) + treat + logb0 + period,   # period goes here
+    family = poisson(),
+    data = pbc_split) |> 
+  tbl_regression(exponentiate = T)
+```
+
+
+```{r}
+whitehall <- read_stata("WHITEHAL.DTA")
+
+# Factorise job grade
+whitehall$grade <- factor(whitehall$grade,
+                          levels = c(1, 2),
+                          labels = c("higher", "lower"))
+```
+
+```{r}
+
+# Cox
+cox_time <- coxph(Surv(
+  as.numeric(timein),
+  as.numeric(timeout),
+  event = chd
+) ~ grade, data = whitehall)
+
+tbl_time <- tbl_regression(cox_time, exponentiate = T)
+# Cox
+cox_age <- coxph(Surv(
+  as.numeric(timein),
+  as.numeric(timeout),
+  event = chd,
+  origin = as.numeric(timebth)
+) ~ grade, data = whitehall)
+tbl_age <- tbl_regression(cox_age, exponentiate = T)
+
+tbl_merge(list(tbl_time,tbl_age))
+```
+```{r}
+# Split the survival object
+split_white <- survSplit(Surv(
+  as.numeric(timein),
+  as.numeric(timeout),
+  event = chd,
+  origin = as.numeric(timebth)
+) ~ .,
+                         data = whitehall,
+                         cut = c(40*365.25, 65*365.25, 90*365.25),
+                         episode = "age",
+start = "tstart",
+end = "tstop")
+
+# Factorise variable and label values
+split_white$age <- factor(split_white$age,
+                          levels = c(1, 2, 3, 4),
+                          labels = c("<=40", "40-65", "65-90", ">=90"))
+
+split_white <- split_white  |> 
+  mutate(
+    pyears=as.numeric(tstop - tstart))
+
+#-- BROKEN Fit a Poisson model
+glm(chd ~ offset(log(pyears)) + grade + age,   # period goes here
+    family = poisson(),
+    data = split_white) |> 
+  tbl_regression(exponentiate = T)
+
+```
+

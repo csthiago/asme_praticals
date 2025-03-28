@@ -1,0 +1,25 @@
+project:
+  type: website
+
+website:
+  title: "LSHTM - ASME"
+  sidebar: 
+    id: home
+    style: "docked"
+    contents: 
+      - ASME_02.qmd
+      - ASME_04.qmd
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - about.qmd
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    toc: true
+
+editor: visual
+
