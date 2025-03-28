@@ -1,7 +1,6 @@
 ---
 title: "Cox Regression"
 author: "Thiago Cerqueira Silva"
-subtitle: "Adaptaded from Andrea Mazzella codes"
 format: 
   html: 
     toc: true
@@ -14,7 +13,6 @@ execute:
   message: false
 editor: visual
 ---
-
 
 ```{r}
 # read "dta" files
@@ -39,7 +37,7 @@ Read in dataset trinmlsh.dta. This contains data from a cohort study on cardiova
 
 ```{r}
 # Import the dataset
-trin <- read_dta("TRINMLSH.DTA")
+trin <- read_dta("datasets/TRINMLSH.DTA")
 trin <- trin |> 
   mutate(
     ethgp = factor(ethgp,
@@ -64,9 +62,8 @@ trin <- trin |>
 ```
 
 ## 2
-Examine the effect of smoking on all-cause mortality using strate (or stptime if you
-prefer) and stcox. You may wish to recode smokenum into a smaller number of categories,
-say: 0=non-smoker, 1=ex-smoker, 2=current smoker.
+
+Examine the effect of smoking on all-cause mortality using strate (or stptime if you prefer) and stcox. You may wish to recode smokenum into a smaller number of categories, say: 0=non-smoker, 1=ex-smoker, 2=current smoker.
 
 We can now examine the smoking-specific mortality rates (per 1,000 person-years). Let's first use the classical technique and then let's use Cox regression.
 
@@ -77,8 +74,8 @@ pyears(Surv(time = years, event=death) ~ smoke3, data = trin, scale = 1) %>%
   summary(n = F, rate = T, ci.r = T, scale = 1000)
 ```
 
+# Q3
 
-# Q3 
 Re-examine Question 1 and Question 2 using attained age as the time-scale. Is the proportionality assumption valid? What are the problems with assessing proportionality using graphical methods when using age as the time-scale?
 
 -   N is the size of the group
@@ -93,6 +90,7 @@ tbl_regression(cox_smok3, exponentiate = T) |>
   add_n(location="level") |> 
   add_nevent(location="level")
 ```
+
 ```{r}
 # Create Cox model
 cox_smok3 <- coxph(Surv(time = years, event=death) ~ as.numeric(smoke3), data = trin)
@@ -102,8 +100,6 @@ tbl_regression(cox_smok3, exponentiate = T) |>
   add_n(location="level") |> 
   add_nevent(location="level")
 ```
-
-
 
 ```{r}
 # Survival object set for current age
@@ -119,7 +115,7 @@ tbl_regression(cox_smok3_age, exponentiate = T) |>
 
 ```{r}
 # Read in the pbc1bas.dta dataset 
-pbc <- read_dta("PBC1BAS.DTA")
+pbc <- read_dta("datasets/PBC1BAS.DTA")
 
 # Data management
 pbc<- pbc |> mutate(death = d,
@@ -131,7 +127,6 @@ pbc<- pbc |> mutate(death = d,
          select(-d)
 ```
 
-
 ```{r}
 # Poisson model
 mod_pois <- glm(death ~ offset(log(time)) + treat + logb0, family = poisson(), data = pbc) 
@@ -142,9 +137,8 @@ tbl_pois <- tbl_regression(mod_pois,exponentiate = T)
 mod_cox <- coxph(Surv(time,death) ~ treat + logb0, data = pbc)
 tbl_cox <- tbl_regression(mod_cox,exponentiate = T)
 tbl_merge(list(tbl_pois,tbl_cox))
-exp(confint(cox_bilir))
-```
 
+```
 
 ```{r}
 # Split the survival object
@@ -173,9 +167,8 @@ glm(death ~ offset(log(t_fup)) + treat + logb0 + period,   # period goes here
   tbl_regression(exponentiate = T)
 ```
 
-
 ```{r}
-whitehall <- read_stata("WHITEHAL.DTA")
+whitehall <- read_stata("datasets/WHITEHAL.DTA")
 
 # Factorise job grade
 whitehall$grade <- factor(whitehall$grade,
@@ -204,6 +197,7 @@ tbl_age <- tbl_regression(cox_age, exponentiate = T)
 
 tbl_merge(list(tbl_time,tbl_age))
 ```
+
 ```{r}
 # Split the survival object
 split_white <- survSplit(Surv(
@@ -227,11 +221,10 @@ split_white <- split_white  |>
   mutate(
     pyears=as.numeric(tstop - tstart))
 
-#-- BROKEN Fit a Poisson model
+#Fit a Poisson model
 glm(chd ~ offset(log(pyears)) + grade + age,   # period goes here
     family = poisson(),
     data = split_white) |> 
   tbl_regression(exponentiate = T)
 
 ```
-
