@@ -1,0 +1,369 @@
+---
+title: "8: Cox Regression"
+author: "Thiago Cerqueira Silva"
+format: 
+  html: 
+    toc: true
+    toc-location: left
+    self-contained: true
+    code-fold: true
+    code-summary: "Show the code"
+execute: 
+  warning: false
+  message: false
+editor: visual
+---
+
+```{r}
+# read "dta" files
+library(haven) 
+# create table
+library(gtsummary)
+# data wrangling and other functions
+library(tidyverse)
+# if you want to have a output similar to stata
+library(tidylog)
+#cox
+library(survival)
+# plots survival
+library(ggsurvfit)
+
+# Limit significant digits to 2, remove scientific notation
+options(digits = 2, scipen = 9)
+```
+
+# Trinidad
+
+# Q1
+
+The variables timein and timeout hold the dates of entry and exit into the study, while death is the indicator for mortality from any cause. Use stset with these variables, setting timein to be the origin (i.e. sort the records according to follow-up time, as in Figure 4).
+
+::: {.callout-note collapse="true"}
+## Answer
+
+You don't need to do any of this in R. Each regression can have its own time setting!
+:::
+
+```{r}
+# Import the dataset
+trin <- read_dta("datasets/TRINMLSH.DTA")
+<<<<<<< HEAD
+=======
+#This contains data from a cohort study on cardiovascular risk factors and mortality among ~300 men from Trinidad.
+# Some data wrangling
+>>>>>>> 4223fc0 (update)
+trin <- trin |> 
+  mutate(
+    ethgp = factor(ethgp,
+                      levels = c(1:5),
+                      labels = c("African", "Indian", "European", "mixed", "Chin/Sem")),
+    alc = factor(alc,
+                      levels = c(0:3),
+                      labels = c("none", "1-4/wk", "5-14/wk", ">=15/wk")),
+    smoke3 = case_when(
+      smokenum == 0 ~ "non-smok",
+      smokenum == 1 ~ "ex-smok",
+      !is.na(smokenum) ~ "smoker"
+    ),
+    smoke3 = fct_relevel(smoke3, "non-smok"),
+    smokenum = factor(smokenum,
+                      levels = c(0:5),
+                      labels = c("non-smok", "ex-smok", "1-9/d", "10-19/d", "20-29/d", ">=30/d")),
+    chdstart = factor(chdstart,
+                      levels = c(0, 1),
+                      labels = c("no", "yes")
+    ))
+
+```
+
+<<<<<<< HEAD
+## 2
+
+=======
+
+
+# Q2
+>>>>>>> 4223fc0 (update)
+Examine the effect of smoking on all-cause mortality using strate (or stptime if you prefer) and stcox. You may wish to recode smokenum into a smaller number of categories, say: 0=non-smoker, 1=ex-smoker, 2=current smoker.
+
+We can now examine the smoking-specific mortality rates (per 1,000 person-years). Let's first use the classical technique and then let's use Cox regression.
+
+```{r, results = "asis"}
+# Calculate rates
+pyears(Surv(time = years, event=death) ~ smoke3, data = trin, scale = 1) %>%
+  summary(n = F, rate = T, ci.r = T, scale = 1000)
+
+<<<<<<< HEAD
+# Q3
+
+Re-examine Question 1 and Question 2 using attained age as the time-scale. Is the proportionality assumption valid? What are the problems with assessing proportionality using graphical methods when using age as the time-scale?
+
+-   N is the size of the group
+-   Event N is the number of events in that group
+
+```{r}
+=======
+# Note that Surv() can take time data in two different formats: either a combination of data of entry and data of exit, or as a time difference. In this case, `years` codes this time difference, so we'll use it.
+>>>>>>> 4223fc0 (update)
+# Create Cox model
+cox_smok3 <- coxph(Surv(time = years, event=death) ~ smoke3, data = trin)
+
+# Calculating 95% CIs for HRs
+tbl_regression(cox_smok3, exponentiate = T) |> 
+  add_n(location="level") |> 
+  add_nevent(location="level")
+```
+<<<<<<< HEAD
+=======
+-   N is the size of the group
+-   Event N is the number of events in that group
+
+# Q3
+
+Using the rates and rate ratios in part (2), can you see a trend in the relationship between smoking category and all-cause mortality? How would you assess this more formally? How would you present the results from your analyses in parts (2) and (3)?
+
+>>>>>>> 4223fc0 (update)
+
+```{r}
+# Create Cox model
+cox_smok3 <- coxph(Surv(time = years, event=death) ~ as.numeric(smoke3), data = trin)
+
+# Calculating 95% CIs for HRs
+tbl_regression(cox_smok3, exponentiate = T) |> 
+  add_n(location="level") |> 
+  add_nevent(location="level")
+```
+
+<<<<<<< HEAD
+=======
+# Q4
+Consider the possible confounding effect of current age on the relationship between smoking and mortality. By examining the data (but without performing any further modelling) would you expect a Cox model controlling for current age to give different results to one controlling for time in the study? Now perform a Cox model to investigate this.
+
+::: {.callout-note collapse="true"}
+## Answer
+
+Note that in question 2 the Cox model has adjusted for time in the study i.e. everyone is followed up from the time they enter the study and when an event occurs the comparison is with others who have the same amount of follow-up and not with others of the same age. If there are differences in age between the three groups then we would expect an analysis controlling for current age to show confounding (since mortality increases with age). One indicator of this would be the age at entry in the three groups.
+
+:::
+
+>>>>>>> 4223fc0 (update)
+```{r}
+
+trin |> 
+  tbl_summary(include = ageent, by = smoke3)
+
+# Survival object set for current age
+# Cox using the timeage as the time 
+cox_smok3_age <- coxph(Surv(time=as.numeric(timein),time2=as.numeric(timeout),
+                             event = death,
+                             origin = as.numeric(timebth)) ~ smoke3, data = trin)
+
+tbl_regression(cox_smok3_age, exponentiate = T) |> 
+  add_n(location="level") |> 
+  add_nevent(location="level")
+```
+
+# Q5
+
+Use a Poisson model to assess the relationship between treatment and mortality adjusting for baseline bilirubin (logb0). How do the results compare to those from using a Cox model?
+
+```{r}
+# Read in the pbc1bas.dta dataset 
+pbc <- read_dta("datasets/PBC1BAS.DTA")
+
+# Data management
+pbc<- pbc |> mutate(death = d,
+               treat = factor(treat, levels = c(1, 2), labels = c("placebo", "azath")),
+               cenc0 = factor(cenc0, levels = c(0, 1), labels = c("no", "yes")),
+               cir0 = factor(cir0, levels = c(0, 1), labels = c("no", "yes")),
+               gh0 = factor(gh0, levels = c(0, 1), labels = c("no", "yes")),
+               asc0 = factor(asc0, levels = c(0, 1), labels = c("no", "yes"))) |> 
+         select(-d)
+```
+
+```{r}
+# Poisson model
+mod_pois <- glm(death ~ offset(log(time)) + treat + logb0, family = poisson(), data = pbc) 
+
+tbl_pois <- tbl_regression(mod_pois,exponentiate = T)
+
+# Cox model
+mod_cox <- coxph(Surv(time,death) ~ treat + logb0, data = pbc)
+tbl_cox <- tbl_regression(mod_cox,exponentiate = T)
+<<<<<<< HEAD
+tbl_merge(list(tbl_pois,tbl_cox))
+=======
+tbl_merge(list(tbl_pois,tbl_cox),
+          tab_spanner = c("**Poisson**", "**Cox**"))
+
+```
+>>>>>>> 4223fc0 (update)
+
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+The results from the Cox model provide more evidence for an impact of treatment (from the hazard ratios, 95% CIs and the p-values). However, the Cox model adjusts for time in the study as well as baseline bilirubin whereas the Poisson model adjusts for baseline bilirubin only.
+
+:::
+
+# Q6
+In order to make a like for like comparison with the Cox model, what would be a more appropriate analysis using streg (survSplit in R / other functions) and what do the results from this analysis indicate?
+
+
+```{r}
+# Split the survival object
+pbc_split <- survSplit(Surv(time,death) ~ .,
+                       data = pbc,
+                       cut = c(2, 4, 6),
+                       episode = "period",
+                       start = "tstart",
+                       end = "tstop")
+
+# Fix age and create follow-up by band
+pbc_split <- pbc_split |> 
+  mutate(
+    age = age + tstart,
+    t_fup = tstop - tstart
+  )
+
+
+# Factorise variable and label values
+pbc_split$period <- factor(pbc_split$period,
+                           levels = c(1, 2, 3, 4),
+                           labels = c("0-2y", "2-4y", "4-6y", "6-12y"))
+glm(death ~ offset(log(t_fup)) + treat + logb0 + period,   # period goes here
+    family = poisson(),
+    data = pbc_split) |> 
+  tbl_regression(exponentiate = T)
+```
+
+<<<<<<< HEAD
+```{r}
+=======
+
+If you split the time in a more granular way, the results will be even closer! 
+
+```{r}
+# Split the survival object
+pbc_split <- survSplit(Surv(time,death) ~ .,
+                       data = pbc,
+                       cut = c(2,3,4,5,6,7,8,9),
+                       episode = "period",
+                       start = "tstart",
+                       end = "tstop")
+
+# Fix age and create follow-up by band
+pbc_split <- pbc_split |> 
+  mutate(
+    age = age + tstart,
+    t_fup = tstop - tstart
+  )
+
+
+# Factorise variable and label values
+pbc_split$period <- as.factor(pbc_split$period)
+glm(death ~ offset(log(t_fup)) + treat + logb0 + period,   # period goes here
+    family = poisson(),
+    data = pbc_split) |> 
+  tbl_regression(exponentiate = T, include = treat)
+```
+# Q7
+
+Use a Cox regression model to estimate the effect of grade (coded: 1=high; 2=low) using first the follow-up time scale. Then check whether current age is a confounder using both Cox and Poisson regression.
+
+```{r}
+>>>>>>> 4223fc0 (update)
+whitehall <- read_stata("datasets/WHITEHAL.DTA")
+
+# Factorise job grade
+whitehall$grade <- factor(whitehall$grade,
+                          levels = c(1, 2),
+                          labels = c("higher", "lower"))
+```
+
+```{r}
+
+# Cox
+cox_time <- coxph(Surv(
+  as.numeric(timein),
+  as.numeric(timeout),
+  event = chd
+) ~ grade, data = whitehall)
+
+tbl_time <- tbl_regression(cox_time, exponentiate = T)
+# Cox
+cox_age <- coxph(Surv(
+  as.numeric(timein),
+  as.numeric(timeout),
+  event = chd,
+  origin = as.numeric(timebth)
+) ~ grade, data = whitehall)
+tbl_age <- tbl_regression(cox_age, exponentiate = T)
+
+tbl_merge(list(tbl_time,tbl_age),
+         tab_spanner = c("**Time since followup**", "**Age**") )
+```
+
+```{r}
+# Split the survival object
+split_white <- survSplit(Surv(
+  as.numeric(timein),
+  as.numeric(timeout),
+  event = chd,
+  origin = as.numeric(timebth)
+) ~ .,
+                         data = whitehall,
+                         cut = c(50*365.25, 60*365.25, 70*365.25,
+                                 80*365.25),
+                         episode = "age",
+start = "tstart",
+end = "tstop")
+
+# Factorise variable and label values
+split_white$age <- factor(split_white$age,
+                          levels = c(1, 2, 3, 4,5),
+                          labels = c("<=50", "51-60", "61-70", 
+                                     "71-80",
+                                     ">80"))
+
+split_white <- split_white  |> 
+  mutate(
+    pyears=as.numeric(tstop - tstart))
+
+<<<<<<< HEAD
+#Fit a Poisson model
+glm(chd ~ offset(log(pyears)) + grade + age,   # period goes here
+=======
+glm(chd ~ offset(log(pyears)) + grade + age,   
+>>>>>>> 4223fc0 (update)
+    family = poisson(),
+    data = split_white) |> 
+  tbl_regression(exponentiate = T)
+```
+
+# Optional
+
+Think whether you should test for interaction between grade and current age. If so how would you do this using a Poisson model and what are the problems of assessing such an interaction using a Cox model?
+
+```{r}
+
+
+#Fit a Poisson model
+poisson_without <- glm(chd ~ offset(log(pyears)) + grade + age,   
+    family = poisson(),
+    data = split_white)
+poisson_interaction <- glm(chd ~ offset(log(pyears)) + grade * age,   
+    family = poisson(),
+    data = split_white)
+lmtest::lrtest(poisson_without,poisson_interaction)
+```
+
+
+You can also test that with cox regression. If the model is using age as the underlying timescale. The survival packages has inbuilt function for that. The cox.zph function will test proportionality of all the predictors in the model by creating interactions with time using the transformation of time (default is log) specified in the transform option.
+And you can also plot the effect by time
+```{r}
+cox.zph(cox_age)
+plot(cox.zph(cox_age))
+```

@@ -11,6 +11,10 @@ website:
       - ASME_03.qmd
       - ASME_04.qmd
       - ASME_06.qmd
+<<<<<<< HEAD
+=======
+      - ASME_07.qmd
+>>>>>>> 46b9c3e (update files)
   navbar:
     left:
       - href: index.qmd
