@@ -1,4 +1,0 @@
----
-title: "3: Matched case-control studies"
-author: "Thiago Cerqueira Silva"
----
