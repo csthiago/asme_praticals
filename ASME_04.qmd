@@ -1,0 +1,144 @@
+---
+title: "3: Matched case-control studies"
+author: "Thiago Cerqueira Silva"
+format: 
+  html: 
+    toc: true
+    toc-location: right
+    self-contained: true
+    code-fold: true
+    code-summary: "Show the code"
+execute: 
+  warning: false
+  message: false
+editor: visual
+sidebar: home
+---
+
+```{r}
+# Data wrangling
+# read "dta" files
+library(haven) 
+# create table
+library(gtsummary)
+# data wrangling and other functions
+library(tidyverse)
+# if you want to have a output similar to stata
+library(tidylog)
+library(epiDisplay) #some basic tests
+# Limit significant digits to 2, remove scientific notation
+library(survival)
+options(digits = 2, scipen = 9)
+```
+
+```{r}
+diabraz <- read_dta("datasets/DIABRAZ.DTA")
+diabraz2 <- read_dta("datasets/DIABRAZ2.DTA")
+
+
+
+```
+
+```{r}
+#| output: false
+# * BRAZILIAN CASE-CONTROL STUDY OF RISK FACTORS FOR INFANT DEATH FROM DIARRHOEA
+# * case       1=case, 0=control
+# * milkgp     1=breast only, 2=breast+other, 3=other only
+# * bf         1=breastfed, 2=not breastfed
+# * water      Piped water supply: 1=in house, 2=in plot, 3=none
+# * wat2       1=in house/plot 2=none
+# * agegp      Age group (months): 1=0-1, 2=2-3, 3=4-5, 4=6-8, 5=9-11
+# * agegp2     1=0-2, 2=3-5, 3=6-11
+# * milkgp     1=breast only, 2=breast+other, 3=other only
+# Check the class of each variable
+glimpse(diabraz)
+glimpse(diabraz2)
+# case need to be numeric
+diabraz2$case <- as.numeric(diabraz2$case)
+```
+
+# Q1
+
+Use the DIABRAZ.DTA dataset (1 control per case) and the match and mhodds commands to analyse the association between breast feeding (bf) and diarrhoea mortality. Use the mhodds command to estimate the odds ratio, calculate a confidence interval for the OR, and test the null hypothesis of no association. Repeat this analysis using the clogit command, and compare your results. \[For comparison purposes you may like to repeat these analyses using ordinary (unconditional) logistic regression, which should not give the correct results\].
+
+## Mantel-Haenszel
+
+```{r}
+diabraz |>
+  pubh::mhor(case ~ pair / bf)
+
+# Other option
+#epiDisplay::mhor(diabraz$case, diabraz$bf, diabraz$pair, graph = F)
+```
+
+## Conditional Logistic regression
+
+```{r, results='asis'}
+clogit_mod <- clogit(case ~ bf + strata(pair), diabraz)
+tbl_regression(clogit_mod, exponentiate = T)
+```
+
+## Unconditional Logistic regression
+
+```{r, results='asis'}
+unclogit_mod <- glm(case ~ bf, diabraz, family = binomial)
+tbl_regression(unclogit_mod, exponentiate = T)
+```
+
+# Q2
+
+Were children with a piped water supply to the house at lower risk than those with a supply to the plot?
+
+```{r}
+
+mod1<- clogit(case ~ water + agegp2 + strata(set), data = diabraz2)
+tbl_regression(mod1, exponentiate = T)
+mod2 <- clogit(case ~ water * agegp2 + strata(set), data = diabraz2)
+tbl_regression(mod2, exponentiate = T)
+
+lmtest::lrtest(mod1, mod2)
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+Fit the main effects, water and agegp2, and then compare with the model which includes the interaction term, water\*agegp2. This reveals no evidence of interaction ( $\chi_{10}^2$= 1.71, P=0.79). agegp2 has been used above, giving 4 interaction terms. With age grouped in 5 groups (agegp) there would be 8 interaction terms. It is best to avoid fitting interactions involving a large number of parameters, since such tests for interaction generally have low power
+:::
+
+# Q3
+
+Using the full dataset (DIABRAZ2.DTA), use the variable milkgp to examine the effects of infant feeding practices on the risk of death from diarrhoea. You will need to make sure that you take appropriate account of age in your analysis, since age is likely to be a very strong confounder, and you may also need to consider the possible confounding effects of other risk factors. Draw up a table to show the effect of infant feeding practices.
+
+```{r}
+# crude
+mod1 <- clogit(case ~ milkgp + strata(set), data = diabraz2) 
+
+# adjusted for sex
+mod2 <- clogit(case ~ milkgp + sex + strata(set), data = diabraz2) 
+
+# adjusted for age
+mod3 <- clogit(case ~ milkgp + agegp + strata(set), data = diabraz2) 
+
+# adjusted for age by month
+mod4 <- clogit(case ~ milkgp + as.factor(age) + strata(set), data = diabraz2) 
+
+# adjusted for age and mothers education
+mod5 <- clogit(case ~ milkgp + as.factor(age) + meduc + strata(set), data = diabraz2) 
+
+tbl1 <- tbl_regression(mod1, exponentiate = T)
+tbl2 <- tbl_regression(mod2, exponentiate = T)
+tbl3 <- tbl_regression(mod3, exponentiate = T)
+tbl4 <- tbl_regression(mod4, exponentiate = T)
+tbl5 <- tbl_regression(mod5, exponentiate = T)
+tbl_merge(list(tbl1,
+               tbl2,
+               tbl3,
+               tbl4,
+               tbl5),
+          tab_spanner = c("**Crude**", "**Adjusted Sex**",
+                          "**Adjusted agegroup**","**Adjusted age-month**",
+                          "**Adjusted age-month/mother education**")) |> 
+    modify_column_hide(columns = c(p.value_1, p.value_2,
+                                   p.value_3, p.value_4,
+                                   p.value_5))# remove p values (tidier)
+```

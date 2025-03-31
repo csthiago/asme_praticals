@@ -1,12 +1,7 @@
 ---
-title: "asme_praticals"
+title: ""
 sidebar: home
 ---
 
-This is a Quarto website.
+This site contains the solutions in R for Advanced Statistical Methods in Epidemiology (2412)
 
-To learn more about Quarto websites visit <https://quarto.org/docs/websites>.
-
-```{r}
-1 + 1
-```

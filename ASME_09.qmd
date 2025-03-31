@@ -1,0 +1,4 @@
+---
+title: "09: Further issues in analysis of cohort studies"
+author: "Thiago Cerqueira Silva"
+---

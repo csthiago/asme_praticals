@@ -2,8 +2,6 @@
 title: "About"
 ---
 
-About this site
+This site was built using Quarto.
 
-```{r}
-1 + 1
-```
+All the material was elaborated by [Thiago Cerqueira Silva](https://www.lshtm.ac.uk/aboutus/people/cerqueira-silva.thiago), based on previous solutions by Andrea Mazzella and Julian Matthewman (<https://github.com/andreamazzella/R4SME>)
