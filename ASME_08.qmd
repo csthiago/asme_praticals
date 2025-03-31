@@ -4,7 +4,7 @@ author: "Thiago Cerqueira Silva"
 format: 
   html: 
     toc: true
-    toc-location: left
+    toc-location: right
     self-contained: true
     code-fold: true
     code-summary: "Show the code"
@@ -27,7 +27,6 @@ library(tidylog)
 library(survival)
 # plots survival
 library(ggsurvfit)
-
 # Limit significant digits to 2, remove scientific notation
 options(digits = 2, scipen = 9)
 
@@ -61,17 +60,14 @@ trin <- trin |>
 
 ```
 
-
 # Q1
 
 The variables timein and timeout hold the dates of entry and exit into the study, while death is the indicator for mortality from any cause. Use stset with these variables, setting timein to be the origin (i.e. sort the records according to follow-up time, as in Figure 4).
 
 You don't need to do any of this (stset) in R. Each regression can have its own time setting!
 
-
-
-
 # Q2
+
 Examine the effect of smoking on all-cause mortality using strate (or stptime if you prefer) and stcox. You may wish to recode smokenum into a smaller number of categories, say: 0=non-smoker, 1=ex-smoker, 2=current smoker.
 
 We can now examine the smoking-specific mortality rates (per 1,000 person-years). Let's first use the classical technique and then let's use Cox regression.
@@ -93,14 +89,12 @@ tbl_regression(cox_smok3, exponentiate = T) |>
   add_nevent(location="level")
 ```
 
-
 -   N is the size of the group
 -   Event N is the number of events in that group
 
 # Q3
 
 Using the rates and rate ratios in part (2), can you see a trend in the relationship between smoking category and all-cause mortality? How would you assess this more formally? How would you present the results from your analyses in parts (2) and (3)?
-
 
 ```{r}
 # Create Cox model
@@ -115,19 +109,17 @@ tbl_regression(cox_smok3, exponentiate = T) |>
 ::: {.callout-note collapse="true"}
 ## Answer
 
-You can assess the trend formally by treating the smoke variable as numeric (ordinal in this case), so the model will evaluate if the increase in each point is associated with increase in the hazard. 
-
+You can assess the trend formally by treating the smoke variable as numeric (ordinal in this case), so the model will evaluate if the increase in each point is associated with increase in the hazard.
 :::
 
-
 # Q4
+
 Consider the possible confounding effect of current age on the relationship between smoking and mortality. By examining the data (but without performing any further modelling) would you expect a Cox model controlling for current age to give different results to one controlling for time in the study? Now perform a Cox model to investigate this.
 
 ::: {.callout-note collapse="true"}
 ## Answer
 
 Note that in question 2 the Cox model has adjusted for time in the study i.e. everyone is followed up from the time they enter the study and when an event occurs the comparison is with others who have the same amount of follow-up and not with others of the same age. If there are differences in age between the three groups then we would expect an analysis controlling for current age to show confounding (since mortality increases with age). One indicator of this would be the age at entry in the three groups.
-
 :::
 
 ```{r}
@@ -147,9 +139,8 @@ tbl_regression(cox_smok3_age, exponentiate = T) |>
   add_nevent(location="level")
 ```
 
-
-
 # Q5
+
 *Using PBC1BAS dataset*
 
 ```{r}
@@ -168,7 +159,6 @@ pbc<- pbc |> mutate(death = d,
 ```
 
 Use a Poisson model to assess the relationship between treatment and mortality adjusting for baseline bilirubin (logb0). How do the results compare to those from using a Cox model?
-
 
 ```{r}
 # Poisson model
@@ -191,12 +181,11 @@ tbl_merge(list(tbl_pois,tbl_cox),
 ## Answer
 
 The results from the Cox model provide more evidence for an impact of treatment (from the hazard ratios, 95% CIs and the p-values). However, the Cox model adjusts for time in the study as well as baseline bilirubin whereas the Poisson model adjusts for baseline bilirubin only.
-
 :::
 
 # Q6
-In order to make a like for like comparison with the Cox model, what would be a more appropriate analysis using streg (survSplit in R / other functions (see Epi package)) and what do the results from this analysis indicate?
 
+In order to make a like for like comparison with the Cox model, what would be a more appropriate analysis using streg (survSplit in R / other functions (see Epi package)) and what do the results from this analysis indicate?
 
 ```{r}
 # Split the survival object
@@ -225,7 +214,7 @@ glm(death ~ offset(log(t_fup)) + treat + logb0 + period,   # period goes here
   tbl_regression(exponentiate = T)
 ```
 
-If you split the time in a more granular way, the results will be even closer! 
+If you split the time in a more granular way, the results will be even closer!
 
 ```{r}
 # Split the survival object
@@ -251,6 +240,7 @@ glm(death ~ offset(log(t_fup)) + treat + logb0 + period,   # period goes here
     data = pbc_split) |> 
   tbl_regression(exponentiate = T, include = treat)
 ```
+
 # Q7
 
 Use a Cox regression model to estimate the effect of grade (coded: 1=high; 2=low) using first the follow-up time scale. Then check whether current age is a confounder using both Cox and Poisson regression.
@@ -337,9 +327,8 @@ poisson_interaction <- glm(chd ~ offset(log(pyears)) + grade * age,
 lmtest::lrtest(poisson_without,poisson_interaction)
 ```
 
+You can also test that with cox regression. If the model is using age as the underlying timescale. The survival packages has inbuilt function for that. The cox.zph function will test proportionality of all the predictors in the model by creating interactions with time using the transformation of time (default is log) specified in the transform option. And you can also plot the effect by time
 
-You can also test that with cox regression. If the model is using age as the underlying timescale. The survival packages has inbuilt function for that. The cox.zph function will test proportionality of all the predictors in the model by creating interactions with time using the transformation of time (default is log) specified in the transform option.
-And you can also plot the effect by time
 ```{r}
 cox.zph(cox_age)
 plot(cox.zph(cox_age))

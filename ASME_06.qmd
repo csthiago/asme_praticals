@@ -1,7 +1,37 @@
 ---
 title: "06: Stratifying on time for cohort studies"
 author: "Thiago Cerqueira Silva"
+format: 
+  html: 
+    toc: true
+    toc-location: right
+    self-contained: true
+    code-fold: true
+    code-summary: "Show the code"
+execute: 
+  warning: false
+  message: false
+editor: visual
+sidebar: home
 ---
+
+```{r}
+# read "dta" files
+library(haven) 
+# create table
+library(gtsummary)
+# data wrangling and other functions
+library(tidyverse)
+# if you want to have a output similar to stata
+library(tidylog)
+#cox
+library(survival)
+# plots survival
+library(ggsurvfit)
+# Limit significant digits to 2, remove scientific notation
+options(digits = 2, scipen = 9)
+```
+
 
 # Q1
 
@@ -9,10 +39,323 @@ Open a log file, change to the directory where your ASME data have been copied a
 
 ```{r}
 whitehall <- read_stata("datasets/WHITEHAL.DTA")
+
+# data wrangling
+whitehall <- whitehall |> 
+  mutate(
+    id = as.integer(id),
+    all = as.integer(all), # NB outcomes must remain numerical
+    chd = as.integer(chd),
+    grade4 = case_when( # recoding as character using case_when, most models will recognize characters as factors with some exemptions (mgcv doesnt)
+      grade4 == 1 ~ "admin",
+      grade4 == 2 ~ "profess",
+      grade4 == 3 ~ "clerical",
+      grade4 == 4 ~ "other"
+    ),
+    smok = case_when(
+      smok == 1 ~ "never",
+      smok == 2 ~ "ex",
+      smok == 3 ~ "1-14/day",
+      smok == 4 ~ "15-24/day",
+      smok == 5 ~ "25+/day"
+    ),
+    grade = case_when(
+      grade == 1 ~ "higher",
+      grade == 2 ~ "lower"),
+    cholgrp = as.factor(cholgrp),
+    sbpgrp = as.factor(sbpgrp))
 ```
 
-You don't need to do any of this in R. Each regression can have its own time setting!
 
 # Q2
 
-Compute the rates for the two grades of employment categories using the commands below.
+Compute the rates for the two grades of employment categories using the commands below. `pyears()`
+
+
+**In days**
+```{r, results='asis'}
+# Calculate rates
+pyears(Surv(time = as.numeric(timein), 
+                                 time2 = as.numeric(timeout), 
+                                 event = chd) ~ grade, data = whitehall, scale = 1) %>%
+  summary(n = F, rate = T, ci.r = T, scale = 1000)
+```
+
+**In years**
+```{r, results='asis'}
+# Calculate rates
+pyears(Surv(time = as.numeric(timein), 
+                                 time2 = as.numeric(timeout), 
+                                 event = chd) ~ grade, data = whitehall) %>%
+  summary(n = F, rate = T, ci.r = T, scale = 1000)
+```
+
+::: {.callout-tip collapse="true"}
+## Coding explanation
+
+Calculate rates stratified by exposure (the two grades of employment: `grade`).
+
+You create a survival object with `Surv()`; it contains duration of follow-up and status at end of follow-up. You dont need to setup it globally as in STATA. You have freedom to use different timescales for each model
+
+You then calculate stratified rates `pyears()`: in the formula, you use a Surv object, and then the stratification; you then pipe this into `summary()` 
+
+The argument "scale" from `pyears()` is to scaling the results, for example if your time is in days and want to report in years use scale = 365.25 (the default value)
+
+:::
+
+Calculate the RR by hand (from the two rates shown on the screen).
+
+::: {.callout-note collapse="true"}
+## Answer
+
+$\frac{8.8}{4.4}=2$
+
+:::
+
+
+# Q3
+
+Now, set again the time and outcome variables with stset but this time, use the time of birth as the origin, i.e. organise the data according to current age.
+
+```{r, results='asis'}
+# Calculate rates
+pyears(Surv(time = as.numeric(timein), 
+                                 time2 = as.numeric(timeout), 
+            origin = as.numeric(timebth),
+                                 event = chd) ~ grade, data = whitehall) %>%
+  summary(n = F, rate = T, ci.r = T, scale = 1000)
+```
+
+
+```{r}
+# I dont know any easy alternative to see the summary (similar to STATA)
+summary(Surv(as.numeric(whitehall$timein)/365.25, 
+     as.numeric(whitehall$timeout)/365.25,
+     origin = as.numeric(whitehall$timebth)/365.25,
+     whitehall$chd))
+```
+
+
+# Q4, Q5 and Q6
+
+Next we need to split the individual follow-up times into intervals specific to different
+agebands.
+
+Use the stsplit command to create 5-years groups of current age between age 50 and 80 and 10-year groups for the youngest and oldest groups.
+
+```{r, results='asis'}
+# dividing by 365.25 to transform in years instead days
+# the variables used in time, time2,origin will be removed from the new dataset
+white_split <- survSplit(
+  Surv(
+    time = as.numeric(timein) / 365.25,
+    time2 = as.numeric(timeout) / 365.25,
+    event = chd,
+    origin = as.numeric(timebth) / 365.25
+  ) ~ .,
+  data = whitehall,
+  cut = c(40, seq(50, 80, 5), 90),
+  episode = "ageband"
+)
+
+white_split |>  filter(id == "5001") |> 
+  select(id,
+         tstart, tstop, ageband) |> 
+  left_join(whitehall |> 
+              select(id,timein,timeout,timebth) |> 
+              mutate(age_enter = (timein-timebth)/365.25)) |> 
+  gt::gt()
+```
+
+# Q7
+Note that there is no change in the information about length of follow-up
+
+```{r}
+# Stratify by grade
+# use scale =1 because the time is already in years
+pyears(Surv(tstart, tstop,chd) ~ grade,
+       data = white_split,
+       scale=1) %>%
+  summary(n = F, rate = T, ci.r = T, scale = 1000)
+```
+
+
+# Q8
+
+Tabulate by agebands now
+
+```{r, results='asis'}
+pyears(Surv(tstart, tstop,chd) ~ ageband,
+       data = white_split,
+       scale=1) |> 
+  summary(n = T, rate = T, ci.r = T, scale = 1000) #use n=T to see the number of individuals who were followed in each ageband
+```
+
+# Q9 
+
+Calculate the ageband-specific RRs for Low grade versus High grade using stmh and assess whether the effect of grade is the same across all the strata. Is it necessary to report the stratum specific estimates?
+Do you think that age confounds the relationship between job grade and CHD mortality?
+
+```{r}
+pyears(Surv(tstart, tstop,chd) ~ ageband+grade,
+       data = white_split,
+       scale=1)|> 
+  summary(n = T, rate = T, ci.r = T, scale = 1000) 
+
+# To get the RR of grade adjusted for ageband, we need additional steps
+
+dt_rates <- pyears(Surv(tstart, tstop,chd) ~ ageband+grade,
+       data = white_split,
+       scale=1,
+       data.frame = T) 
+# ageband is coded as numeric in the output
+dt_rates$data$ageband <- as.factor(dt_rates$data$ageband)
+dt_mh <- dt_rates$data |> arrange(desc(grade))
+```
+
+
+Painful to do MH in R
+
+```{r}
+dat.tab04 <- sapply(2:length(unique(dt_mh$ageband)), function(x) 
+   as.matrix(dt_mh[dt_mh$ageband == x,c(5,3)], ncol = 2, byrow = TRUE), 
+   simplify = "array")
+epiR::epi.2by2(dat = dat.tab04, method = "cohort.time", digits = 2, 
+   conf.level = 0.95, interpret = FALSE, 
+   outcome = "as.columns")
+
+```
+
+
+Model based is way better
+
+```{r}
+mod1 <-  glm(event ~ grade + ageband + offset(log(pyears)),
+      family = poisson,
+      data= dt_rates$data) 
+mod_int <-  glm(event ~ grade*ageband + offset(log(pyears)),
+      family = poisson,
+      data= dt_rates$data) 
+tbl_regression(mod1,exponentiate = T)
+
+```
+
+Check interaction
+```{r}
+lmtest::lrtest(mod1,mod_int)
+```
+Different answers from STATA output. Here, we are modelling it using Poisson and testing interaction using a likelihood test. Instead, in the Stata solutions it is with stratified rate ratios (Mantel-Haenszel)
+
+All subsequent questions will be answered using model based / likelihood ratio tests for interactions
+
+# Q10
+
+Using strate and stmh examine (a) the effect of smoking on CHD mortality, (b) whether smoking confounds the relationship between job grade and CHD mortality. You may wish to recode the smoking variable into three categories (i) never, (ii) ex, (iii) current smokers
+
+```{r}
+
+# Recode
+white_split <- white_split |> 
+  mutate(smok3 = as.factor(case_when(smok == "never" ~ "never",
+                                     smok == "ex" ~ "ex",
+                                     smok == "1-14/day" ~ "current",
+                                     smok == "15-24/day" ~ "current",
+                                     smok == "25+/day" ~ "current")),
+         smok3 = fct_relevel(smok3, "never", "ex", "current"))# Order level
+
+
+
+pyears(Surv(tstart, tstop,chd) ~ smok3+grade,
+       data = white_split,
+       scale=1)|> 
+  summary(n = T, rate = T, ci.r = T, scale = 1000) 
+
+# To get the RR of grade adjusted for ageband, we need additional steps
+
+dt_rates <- pyears(Surv(tstart, tstop,chd) ~ smok3+grade,
+       data = white_split,
+       scale=1,
+       data.frame = T) 
+dt_mh <- dt_rates$data 
+```
+
+
+```{r}
+mod1 <-  glm(event ~ grade + smok3 + offset(log(pyears)),
+      family = poisson,
+      data= dt_rates$data) 
+mod_int <-  glm(event ~ grade*smok3 + offset(log(pyears)),
+      family = poisson,
+      data= dt_rates$data) 
+tbl_regression(mod1,exponentiate = T)
+
+```
+
+Check interaction
+```{r}
+lmtest::lrtest(mod1,mod_int)
+```
+
+
+
+# Q11
+
+Examine the effect of job grade on CHD mortality adjusted for ageband and smoking simultaneously. What do you conclude about the effect of job grade on CHD mortality having adjusted for both of these factors together?
+
+```{r}
+pyears(Surv(tstart, tstop,chd) ~ smok3+grade+ageband,
+       data = white_split,
+       scale=1)|> 
+  summary(n = T, rate = T, ci.r = T, scale = 1000) 
+
+dt_rates <- pyears(Surv(tstart, tstop,chd) ~ smok3+grade+ageband,
+       data = white_split,
+       scale=1,
+       data.frame = T)
+# ageband is coded as numeric in the output
+dt_rates$data$ageband <- as.factor(dt_rates$data$ageband)
+mod1 <-  glm(event ~ grade+smok3 + ageband+offset(log(pyears)),
+      family = poisson,
+      data= dt_rates$data) 
+tbl_regression(mod1,exponentiate = T)
+```
+
+
+```{r}
+mod_int <-  glm(event ~ grade*smok3 + ageband+offset(log(pyears)),
+      family = poisson,
+      data= dt_rates$data) 
+lmtest::lrtest(mod1,mod_int)
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+There is no evidence of effect modification between grade and smoking.
+$\chi_{2}^2 = 1.25$ and p=0.53
+
+:::
+
+# Q12
+
+The file whchd.dta holds the Whitehall data already expanded by current age and period (in 5-years periods) and has been stset for the analysis of CHD events. It also holds a variable, called rate, giving the corresponding age and period specific CHD mortality rates for England and Wales (per 1,000,000 person years). Compute the CHD SMR for the cohort of Whitehall civil servants
+
+```{r}
+# way more complicated than STATA (using this format of data)
+# the stranges names from stata dont work verwy well in R - use clean_names to fix
+whcd <- haven::read_dta("datasets/WHCHD.DTA") |> janitor::clean_names()
+# get the expected number of cases - adjusted by period, ageband and grade
+
+expectdt <- whcd |> group_by(ageband, grade, period) |> 
+  reframe(a=mean(rate)/1e6,
+          totalpy=sum(t-t0)) |> 
+  reframe(e=a*totalpy) |> 
+  reframe(sum(e))
+
+
+observedt <- whcd |> 
+  reframe(sum(chd, na.rm=T))
+
+popEpi::poisson.ci(147,227)
+```
+
