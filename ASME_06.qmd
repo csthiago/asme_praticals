@@ -2,3 +2,17 @@
 title: "06: Stratifying on time for cohort studies"
 author: "Thiago Cerqueira Silva"
 ---
+
+# Q1
+
+Open a log file, change to the directory where your ASME data have been copied and then read the Whitehall data, whitehal.dta. In this practical we are interested in the effect of job grade on CHD mortality.
+
+```{r}
+whitehall <- read_stata("datasets/WHITEHAL.DTA")
+```
+
+You don't need to do any of this in R. Each regression can have its own time setting!
+
+# Q2
+
+Compute the rates for the two grades of employment categories using the commands below.

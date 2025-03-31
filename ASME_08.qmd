@@ -30,28 +30,13 @@ library(ggsurvfit)
 
 # Limit significant digits to 2, remove scientific notation
 options(digits = 2, scipen = 9)
-```
 
-# Trinidad
-
-# Q1
-
-The variables timein and timeout hold the dates of entry and exit into the study, while death is the indicator for mortality from any cause. Use stset with these variables, setting timein to be the origin (i.e. sort the records according to follow-up time, as in Figure 4).
-
-::: {.callout-note collapse="true"}
-## Answer
-
-You don't need to do any of this in R. Each regression can have its own time setting!
-:::
-
-```{r}
 # Import the dataset
 trin <- read_dta("datasets/TRINMLSH.DTA")
-<<<<<<< HEAD
-=======
+
 #This contains data from a cohort study on cardiovascular risk factors and mortality among ~300 men from Trinidad.
 # Some data wrangling
->>>>>>> 4223fc0 (update)
+
 trin <- trin |> 
   mutate(
     ethgp = factor(ethgp,
@@ -76,14 +61,17 @@ trin <- trin |>
 
 ```
 
-<<<<<<< HEAD
-## 2
 
-=======
+# Q1
+
+The variables timein and timeout hold the dates of entry and exit into the study, while death is the indicator for mortality from any cause. Use stset with these variables, setting timein to be the origin (i.e. sort the records according to follow-up time, as in Figure 4).
+
+You don't need to do any of this (stset) in R. Each regression can have its own time setting!
+
+
 
 
 # Q2
->>>>>>> 4223fc0 (update)
 Examine the effect of smoking on all-cause mortality using strate (or stptime if you prefer) and stcox. You may wish to recode smokenum into a smaller number of categories, say: 0=non-smoker, 1=ex-smoker, 2=current smoker.
 
 We can now examine the smoking-specific mortality rates (per 1,000 person-years). Let's first use the classical technique and then let's use Cox regression.
@@ -93,18 +81,9 @@ We can now examine the smoking-specific mortality rates (per 1,000 person-years)
 pyears(Surv(time = years, event=death) ~ smoke3, data = trin, scale = 1) %>%
   summary(n = F, rate = T, ci.r = T, scale = 1000)
 
-<<<<<<< HEAD
-# Q3
 
-Re-examine Question 1 and Question 2 using attained age as the time-scale. Is the proportionality assumption valid? What are the problems with assessing proportionality using graphical methods when using age as the time-scale?
+# Note that Surv() can take time data in two different formats: either a combination of data of entry and data of exit, or as a time # difference. In this case, `years` codes this time difference, so we'll use it.
 
--   N is the size of the group
--   Event N is the number of events in that group
-
-```{r}
-=======
-# Note that Surv() can take time data in two different formats: either a combination of data of entry and data of exit, or as a time difference. In this case, `years` codes this time difference, so we'll use it.
->>>>>>> 4223fc0 (update)
 # Create Cox model
 cox_smok3 <- coxph(Surv(time = years, event=death) ~ smoke3, data = trin)
 
@@ -113,8 +92,8 @@ tbl_regression(cox_smok3, exponentiate = T) |>
   add_n(location="level") |> 
   add_nevent(location="level")
 ```
-<<<<<<< HEAD
-=======
+
+
 -   N is the size of the group
 -   Event N is the number of events in that group
 
@@ -122,7 +101,6 @@ tbl_regression(cox_smok3, exponentiate = T) |>
 
 Using the rates and rate ratios in part (2), can you see a trend in the relationship between smoking category and all-cause mortality? How would you assess this more formally? How would you present the results from your analyses in parts (2) and (3)?
 
->>>>>>> 4223fc0 (update)
 
 ```{r}
 # Create Cox model
@@ -134,8 +112,14 @@ tbl_regression(cox_smok3, exponentiate = T) |>
   add_nevent(location="level")
 ```
 
-<<<<<<< HEAD
-=======
+::: {.callout-note collapse="true"}
+## Answer
+
+You can assess the trend formally by treating the smoke variable as numeric (ordinal in this case), so the model will evaluate if the increase in each point is associated with increase in the hazard. 
+
+:::
+
+
 # Q4
 Consider the possible confounding effect of current age on the relationship between smoking and mortality. By examining the data (but without performing any further modelling) would you expect a Cox model controlling for current age to give different results to one controlling for time in the study? Now perform a Cox model to investigate this.
 
@@ -146,11 +130,11 @@ Note that in question 2 the Cox model has adjusted for time in the study i.e. ev
 
 :::
 
->>>>>>> 4223fc0 (update)
 ```{r}
 
 trin |> 
-  tbl_summary(include = ageent, by = smoke3)
+  tbl_summary(include = ageent, by = smoke3) |> 
+  modify_caption("Age by smoke status")
 
 # Survival object set for current age
 # Cox using the timeage as the time 
@@ -163,11 +147,13 @@ tbl_regression(cox_smok3_age, exponentiate = T) |>
   add_nevent(location="level")
 ```
 
-# Q5
 
-Use a Poisson model to assess the relationship between treatment and mortality adjusting for baseline bilirubin (logb0). How do the results compare to those from using a Cox model?
+
+# Q5
+*Using PBC1BAS dataset*
 
 ```{r}
+# some data wrangling
 # Read in the pbc1bas.dta dataset 
 pbc <- read_dta("datasets/PBC1BAS.DTA")
 
@@ -181,23 +167,23 @@ pbc<- pbc |> mutate(death = d,
          select(-d)
 ```
 
+Use a Poisson model to assess the relationship between treatment and mortality adjusting for baseline bilirubin (logb0). How do the results compare to those from using a Cox model?
+
+
 ```{r}
 # Poisson model
-mod_pois <- glm(death ~ offset(log(time)) + treat + logb0, family = poisson(), data = pbc) 
+mod_pois <- glm(death ~ offset(log(time)) + treat + logb0, family = poisson, data = pbc) 
 
 tbl_pois <- tbl_regression(mod_pois,exponentiate = T)
 
 # Cox model
 mod_cox <- coxph(Surv(time,death) ~ treat + logb0, data = pbc)
 tbl_cox <- tbl_regression(mod_cox,exponentiate = T)
-<<<<<<< HEAD
+
 tbl_merge(list(tbl_pois,tbl_cox))
-=======
+
 tbl_merge(list(tbl_pois,tbl_cox),
           tab_spanner = c("**Poisson**", "**Cox**"))
-
-```
->>>>>>> 4223fc0 (update)
 
 ```
 
@@ -209,7 +195,7 @@ The results from the Cox model provide more evidence for an impact of treatment 
 :::
 
 # Q6
-In order to make a like for like comparison with the Cox model, what would be a more appropriate analysis using streg (survSplit in R / other functions) and what do the results from this analysis indicate?
+In order to make a like for like comparison with the Cox model, what would be a more appropriate analysis using streg (survSplit in R / other functions (see Epi package)) and what do the results from this analysis indicate?
 
 
 ```{r}
@@ -238,10 +224,6 @@ glm(death ~ offset(log(t_fup)) + treat + logb0 + period,   # period goes here
     data = pbc_split) |> 
   tbl_regression(exponentiate = T)
 ```
-
-<<<<<<< HEAD
-```{r}
-=======
 
 If you split the time in a more granular way, the results will be even closer! 
 
@@ -274,7 +256,6 @@ glm(death ~ offset(log(t_fup)) + treat + logb0 + period,   # period goes here
 Use a Cox regression model to estimate the effect of grade (coded: 1=high; 2=low) using first the follow-up time scale. Then check whether current age is a confounder using both Cox and Poisson regression.
 
 ```{r}
->>>>>>> 4223fc0 (update)
 whitehall <- read_stata("datasets/WHITEHAL.DTA")
 
 # Factorise job grade
@@ -332,12 +313,8 @@ split_white <- split_white  |>
   mutate(
     pyears=as.numeric(tstop - tstart))
 
-<<<<<<< HEAD
 #Fit a Poisson model
-glm(chd ~ offset(log(pyears)) + grade + age,   # period goes here
-=======
 glm(chd ~ offset(log(pyears)) + grade + age,   
->>>>>>> 4223fc0 (update)
     family = poisson(),
     data = split_white) |> 
   tbl_regression(exponentiate = T)

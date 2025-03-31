@@ -220,7 +220,7 @@ mwanza |>
 knitr::kable(table1, row.names=FALSE, align=c("l", "l", "r", "r", "r"))
 ```
 
-# 3
+# Q3
 
 ## 3a
 
@@ -268,7 +268,7 @@ lmtest::lrtest(logit_without, logit_inter)
 LRT gives $\chi_{3}^2$=0.50, p=0.92 suggesting data are compatible with no interaction between lifetime partners and educational status on HIV status.
 :::
 
-# 4
+# Q4
 
 We will now look at the potential interaction effect between age1 and npa. This is a more complex situation because both have more than 2 levels. Ignore ed2 to keep the model simpler.
 
@@ -293,16 +293,13 @@ glm(case ~ npa * age1,
 mwanza |> tbl_summary(include = c(age1), by = npa)
 ```
 
--   What is the problem and how can it be resolved?
-::: {.callout-note collapse="true"}
-## Answer
+-   What is the problem and how can it be resolved? ::: {.callout-note collapse="true"} \## Answer
 
-This problem arises because there are no cases in the highest sex partner group and the youngest age group. Sparse data (bias), other names is complete/quasi separation problem. 
-:::
+This problem arises because there are no cases in the highest sex partner group and the youngest age group. Sparse data (bias), other names is complete/quasi separation problem. :::
 
 ## 4b
-In order to test for interaction we need to combine npa group 4 with npa group 3. Generate a new variable (eg npa2) with this regrouping. Refit the interaction model using npa2 in place of npa. Is there evidence of any interaction?
 
+In order to test for interaction we need to combine npa group 4 with npa group 3. Generate a new variable (eg npa2) with this regrouping. Refit the interaction model using npa2 in place of npa. Is there evidence of any interaction?
 
 ```{r}
 # Create a new variable, relevel and label
@@ -339,9 +336,10 @@ lmtest::lrtest(logit_without, logit_inter)
 ::: {.callout-note collapse="true"}
 ## Answer
 
-Using `partners` variable in the analysis and conducting the interaction and no interaction model, the data are compatible with null hypothesis of no interaction: LRT gives  $\chi_{10}^2$=9.43, p=0.49.
+Using `partners` variable in the analysis and conducting the interaction and no interaction model, the data are compatible with null hypothesis of no interaction: LRT gives $\chi_{10}^2$=9.43, p=0.49.
 :::
-# 5. Other solutions
+
+# Q5
 
 What other possible workarounds can you come up with for the issue identified in 4a.?
 
@@ -351,7 +349,9 @@ What other possible workarounds can you come up with for the issue identified in
 One alternative is to treat both npa and age1 as trend terms (ordinal values) for the interaction term
 :::
 
-# 6. Estimates of Partners by age group with the interaction
+# Q6
+
+Estimates of Partners by age group with the interaction
 
 ```{r}
 library(marginaleffects)
