@@ -4,4 +4,3 @@ sidebar: home
 ---
 
 This site contains the solutions in R for Advanced Statistical Methods in Epidemiology (2412)
-
