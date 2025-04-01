@@ -13,6 +13,7 @@ website:
       - ASME_07.qmd
       - ASME_08.qmd
       - ASME_09.qmd
+      - ASME_10.qmd
   navbar:
     left:
       - href: index.qmd
