@@ -3,6 +3,8 @@ project:
   output-dir: docs
 website:
   title: "LSHTM - ASME"
+  search: 
+    type: overlay
   sidebar: 
     id: home
     style: "docked"
