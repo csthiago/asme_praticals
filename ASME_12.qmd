@@ -1,5 +1,5 @@
 ---
-title: "16: Additive & multiplicative models"
+title: "12: Missing data"
 author: "Thiago Cerqueira Silva"
 format: 
   html: 
@@ -8,8 +8,10 @@ format:
     self-contained: true
     code-fold: true
     code-summary: "Show the code"
+    df-print: kable
 execute: 
   warning: false
   message: false
 editor: visual
 ---
+

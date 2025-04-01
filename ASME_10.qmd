@@ -378,6 +378,10 @@ Now estimate the odds ratio and obtain confidence intervals based on the GEE app
 
 ```{r}
 library(geepack)
+<<<<<<< HEAD
+=======
+# observations from the same id should be contiguous
+>>>>>>> 6ce5a5a (update)
 dep_gee <- geeglm(mantoux ~ cough,
                data = drop_na(hhtb, cough),  #geeglm doesnt accept missing values
                id = id, 

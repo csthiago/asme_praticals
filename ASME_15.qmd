@@ -1,4 +1,15 @@
 ---
 title: "15: Analysis of quantitative data"
 author: "Thiago Cerqueira Silva"
+format: 
+  html: 
+    toc: true
+    toc-location: right
+    self-contained: true
+    code-fold: true
+    code-summary: "Show the code"
+execute: 
+  warning: false
+  message: false
+editor: visual
 ---

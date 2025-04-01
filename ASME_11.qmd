@@ -1,4 +1,317 @@
 ---
-title: "11: Missing data"
+title: "11: Cluster randomized trials"
 author: "Thiago Cerqueira Silva"
+format: 
+  html: 
+    toc: true
+    toc-location: right
+    self-contained: true
+    code-fold: true
+    code-summary: "Show the code"
+    df-print: kable
+execute: 
+  warning: false
+  message: false
+editor: visual
 ---
+
+# Q1
+
+You have been asked to design an (unmatched) cluster-randomised trial to measure the impact of immunisation with a newly developed pneumococcal vaccine on all-cause child mortality in a rural African population. Villages are to be randomly allocated to the intervention or control arms. In the intervention arm, all infants will receive the pneumococcal vaccine in a 3 dose regimen before the age of 6 months, and will then be followed up for two years (to age 30 months) to record mortality. In the control arm, infants will receive a placebo vaccine and will be followed up in the same way.
+
+Current child mortality in the age-range 6-29 months is estimated to be 35 per 1000 child-years, and you estimate that this is likely to vary between 25 and 45 per 1000 child-years in most villages. You wish to have 80% power of detecting a 20% reduction in all-cause mortality due to the pneumococcal vaccine. Each year, around 100 infants reach the age of six months in each village, and you plan to recruit infants to the trial for three years.
+
+Estimate roughly how many villages you will need to recruit to each arm of the trial. What is the design effect?
+
+```{r}
+library(haven) 
+# create table
+library(gtsummary)
+# data wrangling and other functions
+library(tidyverse)
+# if you want to have a output similar to stata
+library(tidylog)
+#cox
+library(survival)
+
+# Limit significant digits to 2, remove scientific notation
+options(digits = 3, scipen = 9)
+```
+
+```{r}
+t <- 3
+m <- 100
+g <- 2
+lc <- 0.035
+le <- 0.035*0.8
+alpha <- 0.05
+power <- 0.8
+CV <-  0.14
+       T <- t * m  * g
+        IFt <- ((lc +le)/ T + (CV^2) * (lc^2 + le^2))
+        f <- (qnorm(1 - alpha/2) + qnorm(power))^2
+        sample <- (IFt * f)/(lc - le)^2  +1
+```
+
+# Q2
+
+This question uses data from the Gambian National Impregnated Bednet Programme, datasets GAMINDIV.DTA and GAMVILL.DTA. The data are from a cross-sectional survey of children aged 1-4 years conducted at the end of the transmission season in a sample of villages from each treatment arm. See course manual for further details.
+
+```{r}
+dt_cluster <- read_dta("datasets/GAMVILL.DTA") |> 
+  mutate(across(where(is.labelled),as_factor))
+
+dt_ind <- read_dta("datasets/GAMINDIV.DTA") |> 
+  mutate(across(where(is.labelled),as_factor))
+```
+
+Using GAMVILL.DTA, look at histograms of village parasite prevalence by treatment arm. Is there any apparent difference?
+
+Variables that we will use:
+
+\*\*Outcome\*: - in individual dataset: `para` (malaria status: 1 = positive, 2 = negative) - in summary dayaset: `parapos` (number of children positive), `paraneg` (number of children negative), `rate` (village parasite prevalence: parapos/(parapos+paraneg)) \*\*Exposure\*: `group` (treatment arm: 1 = bednets, 2 = control) \*\*Cluster\*: `vid` (village)
+
+```{r}
+dt_cluster |> 
+  mutate(group = if_else(group==1,"Bednets","Control")) |> 
+ggplot() +
+  geom_histogram(aes(rate,fill=group), binwidth = 0.1, color="white")+
+  scale_y_continuous(breaks = seq(0:10))
+```
+
+Estimate the overall parasite prevalence for each group: (i) by summing over all children (GAMINDIV.DTA); and (ii) by averaging village prevalences (GAMVILL.DTA). Is there any difference between these two estimates?
+
+```{r}
+dt_ind |> count(para) |> 
+  mutate(perc = prop.table(n))
+
+
+dt_cluster |> summarise(prev = mean(rate))
+```
+
+Test the hypothesis that net impregnation reduces the prevalence of malaria parasites using the standard chi-squared test, ignoring the randomisation by village (use GAMINDIV.DTA).
+
+```{r}
+
+tab1 <- table(dt_ind$para, dt_ind$group) 
+chisq.test(tab1)
+```
+
+Test the same null hypothesis, but allowing for randomisation by village, by using (i) a t-test on village prevalences; (ii) a Wilcoxon rank sum test on village prevalences.
+
+```{r}
+t.test(rate~group, data=dt_cluster,
+       var.equal = T)
+wilcox.test(rate~group, data=dt_cluster,
+            correct=F)
+
+```
+
+::: {.callout-tip collapse="true"}
+## Coding explanation
+
+The default value for t.test in R is considering unequal variances (while in stata is considering equal variances), that's why we need to include "var.equal=T" to get the same answers. Similarly, for the Wilcoxon, by default it applies a continuity correction in the normal approximation for the p-value (not by default in stata)
+:::
+
+Compare the results you obtain from (d) with your unadjusted result from (c). How does the adjustment for clustering change your interpretation of the effect of bednet impregnation on parasite status?
+
+::: {.callout-note collapse="true"}
+## Answer
+
+The standard $\chi^2$ test shows a highly significant effect of treatment, and is invalid! The other tests, which allow for the clustered design, give larger P-values indicating only weak evidence that the treatment has an effect on parasite status.
+:::
+
+(f) OPTIONAL: Obtain a 95% confidence interval for the ratio of parasite prevalence in the intervention and control arms.
+
+```{r}
+#get the risks
+# dt_ind |> group_by(group) |> 
+#   count(para) |> 
+#   mutate(risk=n/sum(n)) |> 
+#   filter(para==1) |> 
+#   ungroup() |> 
+#   mutate(rr = risk[group=="1"]/risk[group=="2"])
+
+# Risk in each arm
+r0 <- 0.367
+r1 <- 0.298
+
+# Risk ratio 
+RR <- r1/r0
+logRR <- log(RR)
+
+# Standard deviations of rates in each group (by cluster )
+#dt_cluster |> group_by(group) |> summarise(sd(rate)) - get the SD 
+s1 <- 0.15
+s0 <- 0.196
+
+# Numbers of clusters
+c1 <- 17
+c0 <- 17
+
+# Variances of risks
+var_r1 <- (s1^2)/c1
+var_r0 <- (s0^2)/c0
+
+# Variance of the log RR
+var_logRR <- var_r1/(r1^2) + var_r0/(r0^2)
+
+# Confidence intervals
+lower_CI <- exp(logRR - 1.96 * sqrt(var_logRR))
+upper_CI <- exp(logRR + 1.96 * sqrt(var_logRR))
+
+data.frame(rr= RR, lcl = lower_CI, ucl =  upper_CI)
+```
+
+(g) Using GAMINDIV.DTA, reanalyse the data from this trial using GEE and random effects logistic regression. How do your results compare with those from (d)?
+
+```{r}
+library(geepack)
+library(lme4)
+dt_ind <- dt_ind |> 
+  mutate(para_bin = (if_else(para==1,1,0)),
+         vid_fac = as.factor(vid),
+         group_bin = as.factor(if_else(group==2,0,1))) 
+  
+dt_ind_order <- dt_ind |> 
+  arrange(vid_fac) # geeglm (geepack) assumes that the observations from the same cluster appears contiguous
+mod_unorder <- geeglm(para_bin~group_bin,
+       id = vid_fac,
+       data=dt_ind,
+       corstr = "exchangeable",
+       family = binomial(link="logit"))
+
+mod_order <- geeglm(para_bin~group_bin,
+       id = vid_fac,
+       data=(dt_ind_order),
+       corstr = "exchangeable",
+       family = binomial(link="logit"))
+#broom::tidy(mod_unorder, exponentiate=T) #check that it gives the wrong answer
+broom::tidy(mod_order, exponentiate = T) |> gt::gt()
+```
+
+```{r}
+# geeM doesnt require ordering
+# mod <- geeM::geem(para_bin~group_bin,
+#        id = vid_fac,
+#        data=as.data.frame(dt_ind),
+#        corstr = "exchangeable",
+#        family = binomial(link="logit"))
+# summary(mod)
+
+mod <- glmer(para_bin~group_bin + (1|vid),
+       data=dt_ind,
+       family = "binomial")
+broom.mixed::tidy(mod, exponentiate=T, effects="fixed") |> gt::gt()
+```
+
+# Q3
+
+Dataset MZTRIAL.DTA contains individual-level data from the Mwanza trial of the impact of improved STD treatment services on HIV incidence. There were 12 communities in 6 matched pairs, and a random cohort of around 1000 adults aged 15-54 years was followed up in each community. The dataset contains data on HIV seroconversion among those individuals who were seronegative at baseline and who were successfully followed up after two years. We are going to analyse the results of the trial with and without adjustment for confounding variables (see Section 6).
+
+```{r}
+dt_mzt <- read_dta("datasets/MZTRIAL.DTA") |> 
+  mutate(across(where(is.labelled),as_factor))
+
+dt_mzt <- dt_mzt  |>  mutate(arm = factor(arm,
+                            levels = c(0, 1),
+                            labels = c("control", "intervention")),
+              comp = factor(comp),
+              pair = factor(pair),
+              agegp = factor(agegp,
+                             levels = 1:4,
+                             labels = c("15-24", "25-34", "35-44", "45-54")),
+              sex = factor(sex,
+                           levels = c(1, 2),
+                           labels = c("male", "female")))
+```
+
+(a) Using the following commands, first use logistic regression to adjust the results for possible confounding variables, including age, sex, matched pair and the baseline HIV prevalence in each community:
+
+`model = glm(hiv ~ agegp + sex + pair + hivbase)` `predict(model, type="response")`
+
+```{r}
+mod_hiv_prob <- glm(hiv ~ agegp + sex + pair + hivbase,
+                    family = binomial,
+                    data = dt_mzt)
+dt_mzt$fitted_hiv_prob <- predict(mod_hiv_prob, type = "response")
+
+```
+
+```{r}
+dt_mzt |> 
+  ggplot(aes(fitted_hiv_prob))+
+  geom_histogram(aes(fill=arm))
+```
+
+## Coding explanation
+
+The `predict` takes a model and give the prediction using a new dataset. In the case of no "newdata" being declared, it will use the dataset used for fitting the model. The `type="response"` is related to give the prediction in the response scale, i.e., in the probability scale :::
+
+(b) Now use collapse to sum up the observed and fitted values for each of the 12 communities:
+
+```{r}
+
+dt_mzt|> group_by(pair, comp, arm) %>%
+  summarise("observed" = sum(hiv),
+            "at_risk" = n(),
+            "expected" = sum(fitted_hiv_prob))
+```
+
+(c) Unadjusted analysis: Compute the unadjusted RR for each matched pair (obtained using hiv and n from (b)). Carry out a paired t-test on the log(RR). Using the mean of the log(RR), find the geometric mean (*remember: t test of the log-transformed data is a test of differences between geometric means*) of the RR over all matched pairs, and obtain a 95% confidence interval for this. Adjusted analysis: Repeat the above calculations on the adjusted RR for each matched pair (obtained using hiv and fv from (b)).
+
+```{r}
+dd_unaj <- dt_mzt|> group_by(pair, comp, arm) %>%
+  summarise("observed" = sum(hiv),
+            "at_risk" = n(),
+            "expected" = sum(fitted_hiv_prob)) |> 
+  group_by(pair) |> 
+  mutate(rr = observed[arm=="intervention"]/at_risk[arm=="intervention"]/(observed[arm=="control"]/at_risk[arm=="control"])) |>
+  filter(arm=="intervention") |> 
+  select(pair, rr)
+dd_adj <- dt_mzt|> group_by(pair, comp, arm) %>%
+  summarise("observed" = sum(hiv),
+            "at_risk" = n(),
+            "expected" = sum(fitted_hiv_prob)) |> 
+  group_by(pair) |> 
+  mutate(adjrr = observed[arm=="intervention"]/expected[arm=="intervention"]/(observed[arm=="control"]/expected[arm=="control"])) |>
+  filter(arm=="intervention") |> 
+  select(pair, adjrr)
+dd_unaj |> 
+  left_join(dd_adj, by = "pair")
+```
+
+Calculated the paired t-tests in R
+
+**Unadjusted**
+
+```{r}
+dd_unadj_test <- dt_mzt|> group_by(pair, comp, arm) %>%
+  summarise("observed" = sum(hiv),
+            "at_risk" = n(),
+            "expected" = sum(fitted_hiv_prob)) |> 
+  group_by(pair) |> 
+  mutate(logrr = log(observed/at_risk))
+t_test_values<- t.test(dd_unadj_test[dd_unadj_test$arm=="intervention",]$logrr,dd_unadj_test[dd_unadj_test$arm=="control",]$logrr,paired=T)
+t_test_values
+data.frame(estimate = exp(t_test_values$estimate), #need to back transform 
+           lcl = exp(t_test_values$conf.int[1]),
+           ucl = exp(t_test_values$conf.int[2]))
+```
+
+**Adjusted**
+
+```{r}
+dd_adj_test <- dt_mzt|> group_by(pair, comp, arm) %>%
+  summarise("observed" = sum(hiv),
+            "at_risk" = n(),
+            "expected" = sum(fitted_hiv_prob)) |> 
+  group_by(pair) |> 
+  mutate(logadjrr = log(observed/expected))
+
+t_test_values<- t.test(dd_adj_test[dd_adj_test$arm=="intervention",]$logadjrr,dd_adj_test[dd_adj_test$arm=="control",]$logadjrr,paired=T)
+t_test_values
+data.frame(estimate = exp(t_test_values$estimate),
+           lcl = exp(t_test_values$conf.int[1]),
+           ucl = exp(t_test_values$conf.int[2]))
+```
