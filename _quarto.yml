@@ -25,6 +25,7 @@ website:
 format:
   html:
     theme: cosmo
+    code-copy: hover
     css: styles.css
     toc: true
 

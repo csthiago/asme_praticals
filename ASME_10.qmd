@@ -1,4 +1,495 @@
 ---
 title: "10: Analysis of correlated outcome data"
 author: "Thiago Cerqueira Silva"
+format: 
+  html: 
+    toc: true
+    toc-location: right
+    self-contained: true
+    code-fold: true
+    code-summary: "Show the code"
+execute: 
+  warning: false
+  message: false
+editor: visual
 ---
+
+```{r}
+library(haven) 
+# create table
+library(gtsummary)
+# data wrangling and other functions
+library(tidyverse)
+# if you want to have a output similar to stata
+library(tidylog)
+#cox
+library(survival)
+# plots survival
+library(ggsurvfit)
+# Limit significant digits to 2, remove scientific notation
+options(digits = 2, scipen = 9)
+
+papua <- read_dta("datasets/pngnew.dta") |> 
+  mutate(across(where(is.labelled),as_factor))
+
+```
+
+In the first part of the practical we examine data from a pneumococcal vaccine trial performed in Papua New Guinea (pngnew.dta). The data are arranged by episode, so that each child in the trial may have several records, one for each episode of clinical pneumonia (without laboratory confirmation of pneumococcal infection) and, usually, one for the period from their last episode until they exited the trial. Thus, for each child we have data on the number of episodes they experienced (the numerator) and the length of time for which they were followed up (the denominator). We can thus calculate rates and rate ratios and an appropriate statistical model is a Poisson regression model with a random effect to account for between child variability in susceptibility/exposure.
+
+::: callout-note
+These data are from a pneumococcal vaccine trial performed in Papua New Guinea, assessing the vaccine efficacy in preventing clinical episodes of pneumonia among children.
+
+Each child might have more than one record, because each record represents an episode of pneumonia (or the last period of follow-up, without pneumonia).
+
+\*Outcome\* : `any` indicates whether the current period of observation ended in an episode or not
+
+\*Exposure\* : `vacc` (vaccination: 1 = placebo, 2 = vaccine)
+
+\*Cluster\* : `id` (child)
+
+\*Time\* : -`timein` (date of entry in this follow-up period) -`timeout` (date of exit from this follow-up period) -`dob` (date of birth)
+
+\*Other\* - `sex` (1 = male, 2 = female) - `anyprev` (0: no previous episodes of pneumonia, 1: any prev. episodes)
+:::
+
+# Q1
+
+Each child had a unique identification number (id) which identifies which records belong to which child. Examine the data for child id 2921:
+
+```{r}
+papua <- papua |> 
+  mutate(sex = factor(sex, levels = c(1, 2), labels = c("male", "female")),
+                 vacc = factor(vacc, levels = c(1, 2), labels = c("placebo", "vaccine")),
+                 pyrs = as.numeric(timeout - timein) / 365.25)
+
+
+papua |> 
+  filter(id==2921)
+```
+
+# Q2
+
+Individual children can have multiple records in the database, depending on how many episodes of clinical pneumonia they experienced. Use the following commands to examine the number of children in each vaccine group and the number of episodes per child
+
+```{r}
+papua |> group_by(id) |> 
+  summarise(episodes = sum(any),
+            vacc = max(as.numeric(vacc))) |> 
+  mutate(episodes = as.character(episodes)) |> 
+  tbl_summary(include = episodes, by = vacc)
+```
+
+::: {.callout-tip collapse="true"}
+## Coding explanation
+
+Compared to STATA, you dont need to worry about the dataset being modified unintentionally (R\>Stata). The coding is grouping the individuals by id and doing operations in each small dataset (all rows from each id). `sum(any)` sums all values in the "any" variable, `max(as.numeric(vacc))` is a workaround of recovering the group, as each participant is either vaccinated or unvaccinated. This approach wouldn't work if the participant could be vaccinated after enter the study
+:::
+
+Determine how many episodes there were in total in each vaccine group
+
+```{r}
+papua |> group_by(vacc) |> summarise(episodes = sum(any))
+```
+
+# Q3
+
+Things you dont need to do in R.
+
+# Q4
+
+Examine the incidence rates in the vaccinated and unvaccinated groups, and to calculate a rate ratio, ignoring any within-child clustering.
+
+```{r}
+pyears(Surv(pyrs,any) ~ vacc, data = papua, scale = 1) %>%
+  summary(n = F, rate = T, ci.r = T, scale = 100)
+```
+
+Rate ratio (using Poisson and not MH - Stata solution)
+
+```{r}
+dt_pois <- (pyears(Surv(pyrs,any) ~ vacc, data = papua, scale = 1,
+       data.frame = T))$data 
+  glm(event~vacc + offset(log(pyears)), family=poisson,
+      data=dt_pois) |> 
+    tbl_regression(exponentiate = T)
+  
+    glm(event~vacc + offset(log(pyears)), family=poisson,
+      data=dt_pois) |> 
+    tbl_regression(exponentiate = F) |> 
+    modify_column_unhide(column = std.error) #trick to show SE
+```
+
+# Q5
+
+Refit the Poisson regression model, this time asking Stata to compute robust standard errors adjusted for clustering. What impact does taking account of the clustering have on your interpretation of the vaccine’s effect?
+
+We have multiple options to calculate cluster robust SE in R.
+
+```{r}
+# Using the miceadds package (not my preferred option)
+# pois_rob <- miceadds::glm.cluster(papua,
+#                         any ~ vacc + offset(log(pyrs)),
+#                         cluster = "id",
+#                         family = "poisson")
+# summary(pois_rob)
+```
+
+```{r}
+# using sandwich and lmtest
+library(sandwich)
+library(lmtest)
+pois_no_cluster <- glm(any ~ vacc + offset(log(pyrs)),
+                family = "poisson",
+                data = papua)
+coeftest(pois_no_cluster, vcov = vcovCL, cluster = ~ id)
+```
+
+```{r}
+# using parameters::model_parameters (requires sandwich package)
+parameters::model_parameters(
+  pois_no_cluster,
+  vcov = "vcovCL",
+  vcov_args = list(cluster=papua$id),
+  exponentiate=T
+)
+
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+The SE increased from 0.042 to 0.061 (log IRR)
+:::
+
+# Q6
+
+Now fit a random effects model to take account of within child clustering.
+
+```{r}
+
+mod_gamma <- coxph(Surv(pyrs, any) ~ vacc + frailty(id, 
+    distribution = "gamma"), data = papua)
+tbl_regression(mod_gamma,
+               exponentiate = T)
+
+```
+
+::: {.callout-tip collapse="true"}
+## Coding explanation
+
+We are using a Cox regression with a fraitly term. In the stata exercise, it has been calculated using a parametric model
+:::
+
+# Q7
+
+```{r, results='markup'}
+library(lme4)
+# Fit model
+pois_re <- glmer(any ~ vacc + offset(log(pyrs)) + (1|id),
+                 data = papua,
+                 family = "poisson")
+
+summary(pois_re)
+```
+
+```{r}
+# Output
+broom.mixed::tidy(pois_re,
+     conf.int = TRUE,
+     exponentiate = TRUE,
+     effects = "fixed")
+```
+
+# Q8
+
+Fit the model using age, instead time since study entry
+
+```{r}
+
+mod_gamma <- coxph(Surv(time = as.numeric(timein),
+                        time2 = as.numeric(timeout),
+                        origin = as.numeric(dob),
+                        any) ~ vacc + frailty(id, 
+    distribution = "gamma"), data = papua)
+tbl_regression(mod_gamma,
+               exponentiate = T)
+
+```
+
+# Q9
+
+Refit the random effects model also adjusting for age and sex.
+
+```{r}
+papua <- papua |> 
+  mutate(age_years = as.numeric((timein - dob)/365.25))
+pois_re <- glmer(any ~ vacc + offset(log(pyrs)) + 
+                   age_years+
+                   sex+
+                   (1|id),
+                 data = papua,
+                 family = "poisson")
+
+papua<- papua |> 
+  mutate(agegrp = cut(age_years,
+                              breaks = c(0, 1, 2, 3, 4,+Inf),
+                              labels = c("0-1yr,", "1-2yr", "2-3yr", "3-4yr", ">=4yr")))
+# Output
+tbl_cont <- pois_re |> 
+  tbl_regression(exponentiate=T)
+
+pois_re_grp <- glmer(any ~ vacc + offset(log(pyrs)) + 
+                   agegrp+
+                     sex+
+                   (1|id),
+                 data = papua,
+                 family = "poisson")
+
+tbl_cat <- pois_re_grp |> 
+  tbl_regression(exponentiate=T)
+
+tbl_merge(
+  list(tbl_cont, tbl_cat),
+  tab_spanner = c("Continuous age","Categorical age")
+)
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+Controlling for age and sex results in an adjusted rate ratio of 0.91, compared with an unadjusted rate ratio of 0.88. The evidence for a vaccine effect has weakened a little (P-value is now 0.10). Given that this was a fairly large RCT we would not expect strong confounding by age or sex (this can be checked by cross-tabulating age and sex at enrolment against vaccine group).
+:::
+
+# Q10
+
+Open the data set (hhtb.dta) and explore the dataset (`glimpse`) or click on it in the environment tab.
+
+-   Outcome : `mantoux` (tuberculin test result: 0 = negative, 1 = positive)
+
+-   Exposure: `cough` (duration of cough in index case: 1 = \<2 months, 2 = \>=2 months)
+
+-   Cluster: `id` (household, so = index case)
+
+-   hiv - `hiv` (HIV status of index case: 1 = negative, 2 = positive)
+
+-   age group: `agegrp` (age of contact, in years)
+
+```{r}
+hhtb <- read_dta("datasets/HHTB.DTA") |> 
+  mutate(across(where(is.labelled),as_factor))
+
+#glimpse(hhtb)
+```
+
+# Q11
+
+Each record represents an individual household contact of a TB case. The variable id indicates which household contacts belong to the same household (and hence are contacts of the same index case). Use the following commands to examine the distribution of contacts per household by HIV status of the index case.
+
+```{r}
+hhtb |> 
+  group_by(id, hiv) |> 
+  count(mantoux) |> 
+  filter(mantoux==1) |> 
+  mutate(hiv= as.factor(hiv)) |> 
+  ggplot()+
+  geom_histogram(aes(n, fill=hiv),
+                 position = "dodge")+
+  scale_x_continuous(breaks = seq(1:10))
+
+# same answer from stata
+# hhtb |> 
+#   group_by(id) |> 
+#   count(hiv) |> 
+#   filter(!is.na(hiv)) |>
+#   ungroup() |> 
+#   mutate(n = factor(n, sort(unique(n)), ordered = T)) |> 
+#   tbl_summary(include = n, by = hiv)
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+The answer in STATA show you the table. I would rather see the distribution with a histogram. Here is showing the distribution of number of cases (mantoux=1) per household and HIV status.
+:::
+
+# Q12
+
+Perform a similar analysis to examine the distribution of contacts per household by duration of cough of the index case. Why are only 58 households shown?
+
+```{r}
+
+hhtb |> 
+  group_by(id) |> 
+  count(cough) |> 
+  filter(!is.na(cough)) |>
+  ungroup() |> 
+  mutate(n = factor(n, sort(unique(n)), ordered = T)) |> 
+  tbl_summary(include = n, by = cough)
+  
+```
+
+# Q13
+
+For household contacts, examine the distribution of tuberculin positivity by the duration of cough in the index case. Ignoring any clustering, what is the estimated odds ratio and associated 95% c.i.? What would you conclude about the association between duration of cough in the index case and tuberculin positivity in household contacts on the basis of this analysis (if you were unaware of the clustering issue)?
+
+```{r, results='markup'}
+
+table(hhtb$mantoux,hhtb$cough) |> 
+  fisher.test() 
+
+tab1 <- table(hhtb$mantoux,
+              hhtb$cough)
+epiR::epi.2by2(dat = tab1, method = "cohort.count", conf.level = 0.95, units = 100, 
+   interpret = FALSE, outcome = "as.columns")
+
+mod <- glm(mantoux~ cough, family=binomial, data=hhtb)
+parameters::model_parameters(mod, exponentiate=T)
+```
+
+::: {.callout-tip collapse="true"}
+## Coding explanation
+
+We can get odds ratios through multiple ways. None of them matched with STATA solution (Why use MH when there is no stratification?!)
+:::
+
+# Q14
+
+Using the logit command, obtain a 95% confidence interval for the odds ratio based on the robust standard error taking account of clustering. Are your conclusions about the association between duration of cough in the index case and tuberculin positivity in household contacts different from question 13 above?
+
+```{r}
+
+parameters::model_parameters(
+  mod,
+  vcov = "vcovCL",
+  vcov_args = list(cluster=hhtb$id),
+  exponentiate=T
+)
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+The confidence interval has widened to (0.90, 3.52) and we should be (even) more sceptical than before about the strength of evidence for an association (P having increased from 0.03 to 0.10). After taking clustering into account, there is only weak evidence against the null hypothesis.
+:::
+
+# Q15
+
+Now estimate the odds ratio and obtain confidence intervals based on the GEE approach with robust standard errors and assuming an exchangeable correlation matrix. How do your results change from those in question 14?
+
+```{r}
+library(geepack)
+dep_gee <- geeglm(mantoux ~ cough,
+               data = drop_na(hhtb, cough),  #geeglm doesnt accept missing values
+               id = id, 
+               family = "binomial",
+               corstr = "exchangeable")
+parameters::model_parameters(dep_gee, exponentiate=T)
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+The point estimate of the odds ratio for duration of cough is 1.87 with 95% c.i. (0.97, 3.60), P=0.07. The odds ratio is slightly larger than that obtained using only robust standard errors (1.78). The standard error of the log odds ratio is very similar to that obtained from the previous “robust” analysis (0.35 \~ 0.35).
+
+The PI and CI in Stata is different: 1.88 with 95% c.i. (0.94, 3.73) (I dont know why)
+:::
+
+# Q16
+
+Use the xtlogit command again, but this time with the re option, to fit a random effects model for tuberculin positivity in terms of the duration of cough in the index case. Is there evidence from this model of between-household variation (within-household correlation)? Use the quadchk,nooutput command to check the reliability of the estimates from the random effects model.
+
+```{r}
+tb_mixed <-  glmer(mantoux ~ cough + (1|id),
+                 data = hhtb,
+                 family = "binomial")
+
+tbl_laplace <- tb_mixed |> 
+  tbl_regression(exponentiate=T)
+
+
+# You can get using adptative Gaussian quadrature using this
+tb_mixed <-  glmer(mantoux ~ cough + (1|id),
+                 data = hhtb,
+                 family = "binomial",
+                 nAGQ = 12)
+tbl_quadrad <- tb_mixed |> 
+  tbl_regression(exponentiate=T)
+
+tbl_merge(
+  list(tbl_laplace,
+       tbl_quadrad),
+  tab_spanner = c("Laplace","Adaptative")
+)
+#m2 <- GLMMadaptive::mixed_model(fixed = mantoux ~ cough, random = ~ 1 | id, data = hhtb,
+ #                  family = binomial())
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+The estimated odds ratio is 2.19 (95% c.i. 0.94, 5.08; P=0.07). The estimate of the odds ratio is larger than that obtained from the GEE analysis (1.88).
+
+Ps.:The default of glmer function uses a Laplace approximation and not the adaptative Gaussian quadrature
+:::
+
+::: {.callout-tip collapse="true"}
+## Coding explanation
+
+I dont think there is a similar function as "quadchk" from Stata in R. You need to refit the model with different quadrature points (nAGQ)
+:::
+
+# Q17
+
+Use a random effects model to investigate the association between duration of cough in the index case and odds of tuberculin positivity, controlling for the effect of index cases’ HIV status and the age of the household contact, taking account of within-household clustering. Write down some sentences to summarise and interpret your results.
+
+```{r}
+hhtb$agegrp <- factor(hhtb$agegrp)
+tb_mixed <-  glmer(mantoux ~ cough + hiv +agegrp+ (1|id),
+                 data = hhtb,
+                 family = "binomial",
+                 nAGQ = 12)
+tb_mixed |> 
+  tbl_regression(exponentiate=T)
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+In this model we have controlled for both a cluster (household) level (HIV status of the index case) and an individual level covariate (age of the contact). “After controlling for the HIV status of the index case and the age of the contact, the OR for the association between duration of cough of 2+ months and mantoux positivity is 1.85. Compared to the OR from the unadjusted random effects model (2.19) the OR is somewhat reduced suggesting some counfounding by one or both of these variables.”
+:::
+
+# Q18
+
+Use GEE to investigate the association between duration of cough in the index case and odds of tuberculin positivity, controlling for the effect of index cases’ HIV status and the age of the household contact, taking account of within-household clustering. What do you notice about the ORs compared to those obtained with the random effects model.
+
+```{r}
+logit_gee <- geepack::geeglm(mantoux ~ cough + hiv + agegrp,
+                          data = drop_na(hhtb, cough),
+                          id = id,
+                          family = "binomial",
+                          corstr = "exchangeable")
+logit_gee_noage <- geepack::geeglm(mantoux ~ cough + hiv,
+                          data = drop_na(hhtb, cough),
+                          id = id,
+                          family = "binomial",
+                          corstr = "exchangeable")
+
+logit_gee |> 
+  tbl_regression(exponentiate=T)
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+All of the ORs are closer to 1 than those when using random effects, as expected with a population average model.
+:::
+
+```{r}
+anova(logit_gee, logit_gee_noage)
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+The null hypothesis is that after taking account of the index case’s HIV status and cough duration there is no association between the age of the household contact and their Mantoux test status. The alternative hypothesis is that after taking account of the index case’s HIV status and cough duration there is an association between the age of the household contact and their Mantoux test status. There is strong evidence against the null. Note that the test has 2 df because we are testing simultaneously that 2 ORs are both equal to 1.
+:::
