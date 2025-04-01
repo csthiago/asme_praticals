@@ -32,7 +32,6 @@ library(ggsurvfit)
 options(digits = 2, scipen = 9)
 ```
 
-
 # Q1
 
 Open a log file, change to the directory where your ASME data have been copied and then read the Whitehall data, whitehal.dta. In this practical we are interested in the effect of job grade on CHD mortality.
@@ -66,13 +65,12 @@ whitehall <- whitehall |>
     sbpgrp = as.factor(sbpgrp))
 ```
 
-
 # Q2
 
 Compute the rates for the two grades of employment categories using the commands below. `pyears()`
 
-
 **In days**
+
 ```{r, results='asis'}
 # Calculate rates
 pyears(Surv(time = as.numeric(timein), 
@@ -82,6 +80,7 @@ pyears(Surv(time = as.numeric(timein),
 ```
 
 **In years**
+
 ```{r, results='asis'}
 # Calculate rates
 pyears(Surv(time = as.numeric(timein), 
@@ -97,10 +96,9 @@ Calculate rates stratified by exposure (the two grades of employment: `grade`).
 
 You create a survival object with `Surv()`; it contains duration of follow-up and status at end of follow-up. You dont need to setup it globally as in STATA. You have freedom to use different timescales for each model
 
-You then calculate stratified rates `pyears()`: in the formula, you use a Surv object, and then the stratification; you then pipe this into `summary()` 
+You then calculate stratified rates `pyears()`: in the formula, you use a Surv object, and then the stratification; you then pipe this into `summary()`
 
 The argument "scale" from `pyears()` is to scaling the results, for example if your time is in days and want to report in years use scale = 365.25 (the default value)
-
 :::
 
 Calculate the RR by hand (from the two rates shown on the screen).
@@ -109,9 +107,7 @@ Calculate the RR by hand (from the two rates shown on the screen).
 ## Answer
 
 $\frac{8.8}{4.4}=2$
-
 :::
-
 
 # Q3
 
@@ -126,7 +122,6 @@ pyears(Surv(time = as.numeric(timein),
   summary(n = F, rate = T, ci.r = T, scale = 1000)
 ```
 
-
 ```{r}
 # I dont know any easy alternative to see the summary (similar to STATA)
 summary(Surv(as.numeric(whitehall$timein)/365.25, 
@@ -135,11 +130,9 @@ summary(Surv(as.numeric(whitehall$timein)/365.25,
      whitehall$chd))
 ```
 
-
 # Q4, Q5 and Q6
 
-Next we need to split the individual follow-up times into intervals specific to different
-agebands.
+Next we need to split the individual follow-up times into intervals specific to different agebands.
 
 Use the stsplit command to create 5-years groups of current age between age 50 and 80 and 10-year groups for the youngest and oldest groups.
 
@@ -168,9 +161,10 @@ white_split |>  filter(id == "5001") |>
 ```
 
 # Q7
+
 Note that there is no change in the information about length of follow-up
 
-```{r}
+```{r, results='asis'}
 # Stratify by grade
 # use scale =1 because the time is already in years
 pyears(Surv(tstart, tstop,chd) ~ grade,
@@ -178,7 +172,6 @@ pyears(Surv(tstart, tstop,chd) ~ grade,
        scale=1) %>%
   summary(n = F, rate = T, ci.r = T, scale = 1000)
 ```
-
 
 # Q8
 
@@ -191,12 +184,11 @@ pyears(Surv(tstart, tstop,chd) ~ ageband,
   summary(n = T, rate = T, ci.r = T, scale = 1000) #use n=T to see the number of individuals who were followed in each ageband
 ```
 
-# Q9 
+# Q9
 
-Calculate the ageband-specific RRs for Low grade versus High grade using stmh and assess whether the effect of grade is the same across all the strata. Is it necessary to report the stratum specific estimates?
-Do you think that age confounds the relationship between job grade and CHD mortality?
+Calculate the ageband-specific RRs for Low grade versus High grade using stmh and assess whether the effect of grade is the same across all the strata. Is it necessary to report the stratum specific estimates? Do you think that age confounds the relationship between job grade and CHD mortality?
 
-```{r}
+```{r, results='asis'}
 pyears(Surv(tstart, tstop,chd) ~ ageband+grade,
        data = white_split,
        scale=1)|> 
@@ -213,7 +205,6 @@ dt_rates$data$ageband <- as.factor(dt_rates$data$ageband)
 dt_mh <- dt_rates$data |> arrange(desc(grade))
 ```
 
-
 Painful to do MH in R
 
 ```{r}
@@ -225,7 +216,6 @@ epiR::epi.2by2(dat = dat.tab04, method = "cohort.time", digits = 2,
    outcome = "as.columns")
 
 ```
-
 
 Model based is way better
 
@@ -241,9 +231,11 @@ tbl_regression(mod1,exponentiate = T)
 ```
 
 Check interaction
+
 ```{r}
 lmtest::lrtest(mod1,mod_int)
 ```
+
 Different answers from STATA output. Here, we are modelling it using Poisson and testing interaction using a likelihood test. Instead, in the Stata solutions it is with stratified rate ratios (Mantel-Haenszel)
 
 All subsequent questions will be answered using model based / likelihood ratio tests for interactions
@@ -279,7 +271,6 @@ dt_rates <- pyears(Surv(tstart, tstop,chd) ~ smok3+grade,
 dt_mh <- dt_rates$data 
 ```
 
-
 ```{r}
 mod1 <-  glm(event ~ grade + smok3 + offset(log(pyears)),
       family = poisson,
@@ -292,11 +283,10 @@ tbl_regression(mod1,exponentiate = T)
 ```
 
 Check interaction
+
 ```{r}
 lmtest::lrtest(mod1,mod_int)
 ```
-
-
 
 # Q11
 
@@ -320,7 +310,6 @@ mod1 <-  glm(event ~ grade+smok3 + ageband+offset(log(pyears)),
 tbl_regression(mod1,exponentiate = T)
 ```
 
-
 ```{r}
 mod_int <-  glm(event ~ grade*smok3 + ageband+offset(log(pyears)),
       family = poisson,
@@ -331,9 +320,7 @@ lmtest::lrtest(mod1,mod_int)
 ::: {.callout-note collapse="true"}
 ## Answer
 
-There is no evidence of effect modification between grade and smoking.
-$\chi_{2}^2 = 1.25$ and p=0.53
-
+There is no evidence of effect modification between grade and smoking. $\chi_{2}^2 = 1.25$ and p=0.53
 :::
 
 # Q12
@@ -358,4 +345,3 @@ observedt <- whcd |>
 
 popEpi::poisson.ci(147,227)
 ```
-

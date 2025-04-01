@@ -14,3 +14,228 @@ execute:
 editor: visual
 sidebar: home
 ---
+
+```{r}
+# read "dta" files
+library(haven) 
+# create table
+library(gtsummary)
+# data wrangling and other functions
+library(tidyverse)
+# if you want to have a output similar to stata
+library(tidylog)
+#cox
+library(survival)
+# plots survival
+library(ggsurvfit)
+# Limit significant digits to 2, remove scientific notation
+options(digits = 2, scipen = 9)
+```
+
+The following questions refer to the dataset ondrate.dta. This contains data on 1536 individuals living in an onchocercal zone in Nigeria, who were followed over a period up to 3 years to study the incidence of optic nerve disease (OND) and the extent to which onchocerciasis is a risk factor for OND.
+
+# Q1
+
+Use the desc-STATA / `glimpse()` and list(STATA) / `str()` commands to find out what information the dataset contains.
+
+```{r}
+ondrate <- read_stata("datasets/ondrate.dta")
+
+glimpse(ondrate)
+
+ondrate <- read_stata("datasets/ondrate.dta") |> 
+  mutate(across(where(is.labelled),as_factor))
+# alternative
+#str(ondrate)
+```
+
+
+::: {.callout-tip collapse="true"}
+## Coding explanation
+
+Age is coded as numeric, but it is a categorical variable in the original dataset. We can convert all variables with labels (STATA) to factor.
+The code `mutate(across(where(is.labelled),as_factor))` checks if a column has labels, if it has, convert to factor
+:::
+
+# Q2
+
+Use the strate(STATA)/ `pyears()` command to examine the patterns of incidence of OND by age, sex and microfilarial load (a measure of the intensity of onchocercal infection). Don’t forget that you will need to issue the following command before you can use any st commands:
+
+```{r, results='asis'}
+
+# Rates by age
+# The default value of scale in
+pyears(Surv(time = as.numeric(start), 
+                         time2 = as.numeric(end), 
+                         event = disc2) ~ age, ondrate, scale = 365.25) %>% summary(n = F, rate = T, ci.r = T, scale = 1000)
+
+# Rates by sex
+pyears(Surv(time = as.numeric(start), 
+                         time2 = as.numeric(end), 
+                         event = disc2) ~ sex, ondrate)  |>  summary(n = F, rate = T, ci.r = T, scale = 1000)
+
+# Rates by microfilarial load
+pyears(Surv(time = as.numeric(start), 
+                         time2 = as.numeric(end), 
+                         event = disc2) ~ mfpermg, ondrate)  |>  summary(n = F, rate = T, ci.r = T, scale = 1000)
+```
+
+# Q3
+
+Using the streg(STATA) / `glm` command and the dist(exp)(STATA)/`family=poisson` option, fit simple Poisson regression models to estimate (separately) the crude effects of age, sex and microfilarial load on OND incidence. Compare the rate ratio estimates obtained from streg (STATA)/`glm` (Poisson regression) with those obtained using stmh.
+
+(As explained in Pratical 6 - Q9, it is painfull to do mantel haenszel rate ratio in R and there is no gain in conduct MH instead Poisson regression)
+
+```{r}
+# Age
+glm(disc2 ~ age + offset(log(pyrs)),
+    family = poisson,
+    data = ondrate)  |> 
+  tbl_regression() |> 
+  modify_caption(caption = "Age")
+
+# Sex
+glm(disc2 ~ sex + offset(log(pyrs)),
+    family = poisson,
+    data = ondrate)  |> 
+  tbl_regression() |> 
+  modify_caption(caption = "Sex")
+
+# Microfilarial load
+glm(disc2 ~ mfpermg + offset(log(pyrs)),
+    family = poisson,
+    data = ondrate)  |> 
+  tbl_regression() |> 
+  modify_caption(caption = "Microfilarial load")
+```
+
+# Q4
+
+Are either age or sex associated with microfilarial load (MfL)? Which, if either, are likely to confound the association between microfilarial load and incidence of OND?
+
+```{r}
+
+ondrate |> 
+  tbl_summary(by = mfpermg,
+              include = c(age,sex)) |> 
+  add_p()
+
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+MfL of males and females is similar. Age is potential confounder, sex is unlikely to be
+:::
+
+# Q5
+
+Use Poisson regression to obtain rate ratio estimates for microfilarial load adjusted for (i) age, (ii) sex, (iii) both age and sex. Is there any indication of confounding?
+
+```{r}
+
+
+# Age
+tbl_age <- glm(disc2 ~ mfpermg + age + offset(log(pyrs)),
+    family = poisson,
+    data = ondrate)  |> 
+  tbl_regression() 
+
+# Sex
+tbl_sex <- glm(disc2 ~ mfpermg+ sex + offset(log(pyrs)),
+    family = poisson,
+    data = ondrate)  |> 
+  tbl_regression() 
+
+# Microfilarial load
+tbl_both <- glm(disc2 ~ mfpermg +sex+age+ offset(log(pyrs)),
+    family = poisson,
+    data = ondrate)  |> 
+  tbl_regression() 
+
+
+tbl_merge(list(
+  tbl_age,
+  tbl_sex,
+  tbl_both
+  ),
+         tab_spanner = c("**Adjusted for Age**", "**Sex**",
+                         "**Both**") )
+
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+Compared with the crude rate ratios, the age-adjusted rate ratios for MfL groups 1-9.99 and 10+ are somewhat reduced, indicating some confounding as expected (those with high MfL  tend to be older and at greater risk because of their older age).
+
+Adjusting for sex has little impact on the mf load rate ratios, indicating little or no confounding (again as expected – little difference in mf load between the sexes).
+Adjusting for sex in addition to age changes the mf load rate ratios only slightly. There is no evidence (Wald test p-value of 0.587) that sex is associated with OND.  
+
+:::
+
+# Q6
+
+Poisson regression models assume, unless you include interaction terms, that effects of different variables combine multiplicatively. Is there any evidence of an interaction between age and microfilarial load? Between sex and microfilarial load?
+
+
+Sex
+
+```{r}
+tbl_no_int <- glm(disc2 ~ mfpermg +sex+ offset(log(pyrs)),
+    family = poisson,
+    data = ondrate) 
+tbl_w_int <- glm(disc2 ~ mfpermg*sex+ offset(log(pyrs)),
+    family = poisson,
+    data = ondrate) 
+lmtest::lrtest(tbl_no_int,tbl_w_int)
+```
+
+
+Age 
+
+
+```{r}
+tbl_no_int <- glm(disc2 ~ mfpermg +age+ offset(log(pyrs)),
+    family = poisson,
+    data = ondrate) 
+tbl_w_int <- glm(disc2 ~ mfpermg*age+ offset(log(pyrs)),
+    family = poisson,
+    data = ondrate) 
+lmtest::lrtest(tbl_no_int,tbl_w_int)
+```
+
+
+::: {.callout-note collapse="true"}
+## Answer
+
+The likelihood ratio test for sex produces p=0.856, so there is no evidence of an interaction between mf load and sex. i.e. there is no evidence that the effect of MfL on OND is different for males and females. Similarly, there is no evidence of an interaction between age and MfL (p=0.17), however it is important to note the number of parameters (6) used in this LRT. You could try testing age as ordinal variable (also no evidence of interaction, p = 0.14)
+:::
+
+# Q7
+
+Fitting the age variable included in the dataset as a factor introduces three parameters into the model. Would it be reasonable to treat the age variable as continuous and thus reduce the number of parameters in the model? How would you assess this?
+
+
+```{r}
+tbl_ordinal <- glm(disc2 ~ as.numeric(age)+ offset(log(pyrs)),
+    family = poisson,
+    data = ondrate) 
+tbl_cat <- glm(disc2 ~ age+ offset(log(pyrs)),
+    family = poisson,
+    data = ondrate) 
+lmtest::lrtest(tbl_ordinal,tbl_cat)
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+The likelihood ratio test shows no evidence against (or in favor) of using age as ordinal (linear)
+:::
+
+# Q8
+Open whitehal.dta and use Poisson regression to repeat the analyses in question 11 of practical 5, i.e. examine the effect of job grade on CHD mortality adjusted for ageband and smoking status simultaneously. How does the result obtained from Poisson regression compare to that obtained using the stmh command?
+
+::: {.callout-note collapse="true"}
+## Answer
+Q11 of Session 6 already has it
+:::
