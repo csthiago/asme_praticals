@@ -8,13 +8,13 @@ format:
     self-contained: true
     code-fold: true
     code-summary: "Show the code"
+    df-print: kable
 execute: 
   warning: false
   message: false
 editor: visual
 sidebar: home
 ---
-
 
 ```{r}
 library(haven) 
@@ -41,10 +41,9 @@ diet <- diet |>
                  fibre_cat = cut_number(fibre, 3))
 ```
 
-
 # Q1
-Use the data in dietlsh.dta to estimate the effect of hieng on chd when the time scale is set equal to time since entry using stcox.
 
+Use the data in dietlsh.dta to estimate the effect of hieng on chd when the time scale is set equal to time since entry using stcox.
 
 ```{r}
 # Create Cox model
@@ -57,7 +56,8 @@ tbl_regression(cox_mod, exponentiate = T) |>
 ```
 
 # Q2
-Examine the proportionality assumption using a Nelson-Aalen plot.  Does the proportionality assumption appear to be valid?
+
+Examine the proportionality assumption using a Nelson-Aalen plot. Does the proportionality assumption appear to be valid?
 
 ```{r}
 survfit2(Surv(time = fup, event=chd) ~ hieng, data = diet) |> 
@@ -67,7 +67,6 @@ survfit2(Surv(time = fup, event=chd) ~ hieng, data = diet) |>
   scale_y_log10()
 ```
 
-
 ::: {.callout-note collapse="true"}
 ## Answer
 
@@ -76,8 +75,8 @@ On this time scale the effect of hieng appears to be proportional as the two lin
 
 ::: {.callout-tip collapse="true"}
 ## Coding explanation
-Nelson-Aalen plot is the plot in the cumulative hazard. The `ggsurvfit` function accept multiple statistics: "survival" (KM plot), "risk" (Cumulative incidence), "cumhaz" (NA plot), "cloglog" (complimentary log-log survival).
-It is necessary to transform the Y axis to the log scale. (The PH assumption is in log)
+
+Nelson-Aalen plot is the plot in the cumulative hazard. The `ggsurvfit` function accept multiple statistics: "survival" (KM plot), "risk" (Cumulative incidence), "cumhaz" (NA plot), "cloglog" (complimentary log-log survival). It is necessary to transform the Y axis to the log scale. (The PH assumption is in log)
 :::
 
 # Q3
@@ -93,17 +92,18 @@ plot(cox.zph(coxph(Surv(time = fup, event=chd) ~ hieng, data = diet)))
 ::: {.callout-note collapse="true"}
 ## Answer
 
-There is little evidence that the effect of hieng is not proportional using time in the study. 
+There is little evidence that the effect of hieng is not proportional using time in the study.
 :::
 
 ::: {.callout-tip collapse="true"}
 ## Coding explanation
+
 The answer in STATA praticals is using stsplit-spliting the dataset by time since fup- and doing a interaction. In R, we have `cox.zph` which fits a model with interaction between time and each covariate in the model. And it is possible to visualize the time-varying coefficient
 :::
 
 # Q4/Q5
 
-Re-examine Question 1 and Question 2 using attained age as the time-scale.  Is the proportionality assumption valid?  What are the problems with assessing proportionality using graphical methods when using age as the time-scale?
+Re-examine Question 1 and Question 2 using attained age as the time-scale. Is the proportionality assumption valid? What are the problems with assessing proportionality using graphical methods when using age as the time-scale?
 
 Assess the proportionality assumption by including an interaction between time period and hieng.
 
@@ -117,8 +117,8 @@ tbl_regression(cox_mod, exponentiate = T) |>
   add_nevent(location="level")
 ```
 
-
 NA plots
+
 ```{r}
 survfit2(Surv(time = as.numeric(doe)/365.25, 
                       time2 = as.numeric(dox)/365.25,
@@ -137,19 +137,15 @@ cox.zph(cox_mod)
 plot(cox.zph(cox_mod))
 ```
 
-
-
 ::: {.callout-note collapse="true"}
 ## Answer
 
-
-The estimated effect of hieng has not really changed but the effect does not appear to be proportional on this scale.  However, in using attained age as the time-scale there are few individuals at the beginning of follow-up (the median age for entry into the study was 48.8 years).  Therefore when early events occur they are based on few individuals and so the hazard estimates are less reliable here which impacts on the cumulative event rates over the course of follow-up.  For this reason Nelson-Aalen plots are most useful when there is no delayed entry e.g. when the time-scale is time since entry into the study.
+The estimated effect of hieng has not really changed but the effect does not appear to be proportional on this scale. However, in using attained age as the time-scale there are few individuals at the beginning of follow-up (the median age for entry into the study was 48.8 years). Therefore when early events occur they are based on few individuals and so the hazard estimates are less reliable here which impacts on the cumulative event rates over the course of follow-up. For this reason Nelson-Aalen plots are most useful when there is no delayed entry e.g. when the time-scale is time since entry into the study.
 :::
 
 # Q6
 
 Create a categorical variable (fibcat3) containing the fibre content of the diet in thirds. Examine the effect of fibcat3, first using time since entry and then attained age as time-scale.
-
 
 ```{r}
 
@@ -174,7 +170,7 @@ tbl_merge(list(
          tab_spanner = c("**Time since entry**", "**Age**") )
 ```
 
-Assess proportionality 
+Assess proportionality
 
 Time since entry
 
@@ -192,7 +188,7 @@ plot(cox.zph(cox_mod_fup))
 
 # Q7
 
-Use the PBC data set: pbc1bas.dta.  Set the time and failure variables as in ASME 7, section 3 (i.e. with time in the study as the time scale) and then examine separately the effects of treatment, bilirubin and cirrhosis.  What assumptions are you making?  Fit a multivariate model with these three variables. What happens to the estimated rate ratios? Is this the most appropriate time scale to use?
+Use the PBC data set: pbc1bas.dta. Set the time and failure variables as in ASME 7, section 3 (i.e. with time in the study as the time scale) and then examine separately the effects of treatment, bilirubin and cirrhosis. What assumptions are you making? Fit a multivariate model with these three variables. What happens to the estimated rate ratios? Is this the most appropriate time scale to use?
 
 ```{r}
 pbc <- read_dta("datasets/PBC1BAS.DTA")
@@ -225,17 +221,12 @@ tbl_merge(list(tbl_tto,tbl_tto1,tbl_tto2),
           tab_spanner = c("**Treat**", "**Treat+bili**","**Treat+bili+cirr**"))
 ```
 
-
-
 ::: {.callout-note collapse="true"}
 ## Answer
-We find that there is little evidence for an effect of treatment (HR=0.86 (95% CI 0.57 to 1.28), p=0.45).  The assumption is that this effect is constant over the follow-up time period. 
+
+We find that there is little evidence for an effect of treatment (HR=0.86 (95% CI 0.57 to 1.28), p=0.45). The assumption is that this effect is constant over the follow-up time period.
 
 Adjusting for a prognostic factor (bilirubin) which was not evenly distributed between the two treatment arms at baseline we obtain, a treatment HR=0.65 (95% CI 0.43 to 0.99). Further adjustment for presence of cirrhosis at entry into the trial has little effect on the estimated effect of treatment HR= 0.63 (0.42 to 0.96)
 
 The underlying assumption is that treatment reduces mortality by about 37% over the entire follow-up period, once the effects of bilirubin and cirrhosis at entry into the trial are taken into account. Time in study (i.e. time since randomisation) would be the appropriate time scale to use as these are data from a randomised controlled trial.
 :::
-
-
-
- 

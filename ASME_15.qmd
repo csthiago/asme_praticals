@@ -8,8 +8,283 @@ format:
     self-contained: true
     code-fold: true
     code-summary: "Show the code"
+    df-print: kable
 execute: 
   warning: false
   message: false
 editor: visual
 ---
+
+
+
+This computer practical uses the whitehal.dta data set, a subset of data from the Whitehall cohort study.  It contains data on risk factors for ischaemic heart disease collected in male civil servants between 1967-69.  The variables we are interested in were all collected at entry to the study and so the data can be thought of as cross-sectional.  Systolic blood pressure (sbp) is the quantitative outcome, and the aim of the practical is to quantify the relationship between sbp and occupational grade (grade4). 
+
+These are the variables of interest:
+* *Outcome*: systolic blood pressure (continuous: `sbp`)
+* *Exposure*: job grade (categorical: `grade4`)
+* *Confounder*: age (continuous: `agein`)
+
+Note that in the data grade4 is coded 1=admin; 2=professional/executive; 3=clerical; 4=other
+
+```{r}
+library(haven) 
+# create table
+library(gtsummary)
+# data wrangling and other functions
+library(tidyverse)
+# if you want to have a output similar to stata
+library(tidylog)
+#cox
+library(survival)
+
+# Limit significant digits to 3, remove scientific notation (most of the time, scipen=999 removes all time)
+options(digits = 3, scipen = 9)
+```
+
+# Q1
+
+Find the mean (systolic) blood pressure by categories of grade4
+
+```{r}
+white <- read_dta("datasets/WHITEHAL.DTA") |> 
+  mutate(across(where(is.labelled),as_factor))
+```
+
+
+
+```{r}
+white |> 
+  mutate(grade4 = as.factor(grade4)) |> 
+  group_by(grade4) |> 
+  summarise(mean_sbp = mean(sbp),
+            sd_sbp = sd(sbp),
+            median_sbp = median(sbp),
+            iqr_sbp = IQR(sbp))
+```
+
+
+# Q2
+
+Estimate the regression model for sbp with grade categories as explanatory variables.  What is the expected sbp with 95% confidence intervals:
+
+(i)	for a man in grade 1?  
+(ii)	for a man in grade 4?
+
+Compare these estimates to your results for question 1.
+
+```{r}
+white <- white |> 
+  mutate(grade4 = as.factor(grade4))
+
+lm_model <- lm(sbp ~ grade4, data=white)
+
+marginaleffects::avg_predictions(lm_model, variables = "grade4") |> as_tibble()
+# you can also get direct results fitting a model without intercept
+#lm_no_intercept <- lm(sbp ~ -1 + grade4, data=white)
+#broom::tidy(lm_no_intercept, conf.int=T)
+```
+
+::: {.callout-tip collapse="true"}
+## Coding explanation
+
+The code `marginaleffects::avg_predictions` generates the prediction of the model by each level of the variable defined in "variables". Also, if you fit a model without intercept, it will provide the same answers (in this case without other variables)
+:::
+
+
+# Q3
+Using the output of the model you fitted in question 2, do you have evidence to suggest that systolic blood pressure is associated with occupational grade? 
+```{r}
+empty_model <-lm(sbp ~ 1, data = white)
+anova(empty_model, lm_model)
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+The anova (F test) indicates that compared to the null model, the new model with 3 more parameters (Df=3) has significantly improved the fit (F=5.27 and p=0.0013) 
+:::
+
+
+# Q4
+
+Study the association between age at entry (agein) and sbp.  Some of the tools you may wish to use are scatter plots, summaries of sbp by categories of agein, and regression models treating agein as linear, quadratic or categorical.    
+
+
+```{r}
+white |> 
+  ggplot(aes(agein, sbp))+
+  geom_point()+
+  geom_smooth() # add a LOESS - Locally estimated scatterplot smoothing - curve
+
+# recode age
+
+white <- white |> 
+  mutate(
+    agegroup = case_when(
+      agein>40 & agein<=45 ~ "41-45",
+      agein<=50 ~ "46-50",
+      agein <= 55 ~ "51-55",
+      agein <= 60 ~ "56-60",
+      agein <= 70 ~ "61-70"
+    )
+  )
+
+white |> 
+  group_by(agegroup) |> 
+    summarise(mean_sbp = mean(sbp),
+            sd_sbp = sd(sbp),
+            median_sbp = median(sbp),
+            iqr_sbp = IQR(sbp))
+
+
+# Models
+#Linear
+lm_lin <- lm(sbp ~ agein, data = white)
+#marginaleffects::plot_predictions(lm_lin, condition = "agein")
+# Quadratic
+lm_qd <- lm(sbp ~ agein + I(agein*agein), data = white)
+
+marginaleffects::plot_predictions(lm_qd, condition = "agein")+
+  geom_point(data = white,aes(agein,sbp), alpha=0.1, color="blue")+
+  labs(title="Prediction - Age squared")
+# compare models
+anova(lm_lin, lm_qd)
+```
+::: {.callout-note collapse="true"}
+## Answer
+The F-test indicate that including the quadratic term improves the fit. 
+:::
+
+# Q5
+
+Before looking at the data, do you think that age may confound the relationship between grade4 and sbp?  Now fit a linear regression model to find out if age is a confounder or not.   Is there evidence to suggest that occupational grade is independently associated with systolic blood pressure (i.e. after adjustment for age)?  Write a brief conclusion of your findings about the association between occupational grade and systolic blood pressure.
+
+```{r}
+
+lm_model_f <- lm(sbp ~ grade4 + agein +I(agein*agein), data=white)
+broom::tidy(lm_model_f, conf.int=T)
+```
+
+
+```{r}
+anova(lm_model_f,
+      lm(sbp ~ agein + I(agein*agein), white))
+```
+
+
+```{r}
+white |> 
+  ggplot(aes(grade4,agein, color=grade4))+
+  geom_boxplot()
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+Our conclusion is that systolic blood pressure appears to be associated with occupational grade but that this is only as a result of lower grade workers (coded 3, 4) being, on average, older.   The real association is between age and systolic blood pressure.
+
+:::
+
+
+
+
+# Q6
+
+Obtain standardised residuals of your model and use these to check that the model assumptions are reasonable.
+
+```{r}
+white <- white |> 
+  mutate(std_res = rstandard(lm_model_f))
+
+white |> 
+  ggplot(aes(std_res))+
+  geom_histogram(color="white")
+
+white |> 
+  ggplot()+
+ geom_qq(aes(sample=std_res)) +
+  geom_abline(color = "red") +
+  coord_fixed()
+
+# you can get a overall of diagnostics plots using performance::check_model
+#performance::check_model(lm_model_f) # try yourself
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+A histogram of the residuals and the Normal quantile plot both show some positive skew, but not too bad considering the size of the sample. It isn’t necessary to plot both a histogram and a Normal quantile plot but both are shown here for demonstration. 
+
+The residuals versus fitted plot shows no obvious relationship between the residuals and the fitted values, and the variance seems to be constant over the fitted values (perhaps some increasing variability but difficult to say).  A log-transformation of the outcome variable can remove the skew in the distribution of the residuals - see question 7.
+:::
+
+# Q7
+
+You probably found that the model residuals that you obtained in question 6 looked a bit skewed.   A log-transformation of the outcome variable often removes skew.  
+
+(i) Generate a new variable of log-transformed sbp
+
+(ii)	Estimate the regression model for lsbp with grade categories as explanatory variables, equivalent to the model you fitted in question 2.  
+
+```{r}
+white <- white |> 
+  mutate(log_sbp = log(sbp))
+lm_model_log <- lm(log_sbp ~ grade4, data=white)
+broom::tidy(lm_model_log, conf.int=T)
+```
+
+
+(iii)	Obtain standardised residuals of this model and use these to check that the model assumptions are reasonable.  Are the assumptions more appropriate now that you have log-transformed sbp?
+
+```{r}
+white <- white |> 
+  mutate(std_res_log = rstandard(lm_model_log))
+
+white |> 
+  ggplot(aes(std_res_log))+
+  geom_histogram(color="white")
+
+white |> 
+  ggplot()+
+ geom_qq(aes(sample=std_res_log)) +
+  geom_abline(color = "red") +
+  coord_fixed()
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+The residuals are more symmetrical now that sbp has been log-transformed.  The plot of the residuals versus fitted shows no obvious pattern, and the variance of the residuals does not seem to be very different across grades.  The model assumptions are now more appropriate.  Note that there are now only 4 different fitted values, because the only explanatory variables in the model are categories of grade.  In question 6 the fitted values depended on grade and age and were therefore continuous.
+:::
+
+(iv)	The parameter estimates from a linear regression model with a log-transformed outcome can be back-transformed by taking the exponential of the estimate.  Compute the back-transformed estimate for occupational grade 4 compared to occupational grade 1 
+
+```{r}
+broom::tidy(lm_model_log, conf.int=T, exponentiate=T)
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+The back-transformed estimate for grade 4 compared to grade 1 is 1.034.  This means that sbp is expected to be 3.4% higher (or 1.034 times higher) in workers in grade 4 compared to workers in grade 1
+
+$$
+log(sbp) = a + \beta_2*grade_2+\beta_3*grade_3+\beta_4*grade_4
+\newline
+\text{for }grade_{4}\text{ the other betas will be 0, so}
+log(sbp) = a + \beta_4*grade_4
+\newline
+log(sbp) - a = \beta_4*grade_4
+\newline
+a = log(sbp|grade_1)
+\newline
+log(sbp) - log(sbp|grade_1) = \beta_4*grade_4
+\newline
+grade_4=1
+\newline
+log(sbp) - log(sbp|grade_1) = \beta_4
+\newline
+log((sbp|grade_4)/(sbp|grade_1)) = \beta_4
+\newline
+(sbp|grade_4)/(sbp|grade_1) = exp(\beta_4)
+$$
+
+:::

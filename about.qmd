@@ -6,4 +6,6 @@ This site was built using Quarto.
 
 All the material was elaborated by [Thiago Cerqueira Silva](https://www.lshtm.ac.uk/aboutus/people/cerqueira-silva.thiago), based on previous solutions by Andrea Mazzella and Julian Matthewman (<https://github.com/andreamazzella/R4SME>)
 
-Ps.: In this material, I use `|>` (native pipe operator) instead of `%>%` (magrittr pipe). You can find it in Tools->Global Options->Code->Use native pipe operator
+Ps.: In this material, I use `|>` (native pipe operator) instead of `%>%` (magrittr pipe). You can find it in Tools-\>Global Options-\>Code-\>Use native pipe operator
+
+Ps2.: Some confidence intervals will differ from those calculated in STATA.

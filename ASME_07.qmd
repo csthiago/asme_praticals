@@ -8,6 +8,7 @@ format:
     self-contained: true
     code-fold: true
     code-summary: "Show the code"
+    df-print: kable
 execute: 
   warning: false
   message: false
@@ -49,12 +50,10 @@ ondrate <- read_stata("datasets/ondrate.dta") |>
 #str(ondrate)
 ```
 
-
 ::: {.callout-tip collapse="true"}
 ## Coding explanation
 
-Age is coded as numeric, but it is a categorical variable in the original dataset. We can convert all variables with labels (STATA) to factor.
-The code `mutate(across(where(is.labelled),as_factor))` checks if a column has labels, if it has, convert to factor
+Age is coded as numeric, but it is a categorical variable in the original dataset. We can convert all variables with labels (STATA) to factor. The code `mutate(across(where(is.labelled),as_factor))` checks if a column has labels, if it has, convert to factor
 :::
 
 # Q2
@@ -91,21 +90,21 @@ Using the streg(STATA) / `glm` command and the dist(exp)(STATA)/`family=poisson`
 glm(disc2 ~ age + offset(log(pyrs)),
     family = poisson,
     data = ondrate)  |> 
-  tbl_regression() |> 
+  tbl_regression(exponentiate=T) |> 
   modify_caption(caption = "Age")
 
 # Sex
 glm(disc2 ~ sex + offset(log(pyrs)),
     family = poisson,
     data = ondrate)  |> 
-  tbl_regression() |> 
+  tbl_regression(exponentiate=T) |> 
   modify_caption(caption = "Sex")
 
 # Microfilarial load
 glm(disc2 ~ mfpermg + offset(log(pyrs)),
     family = poisson,
     data = ondrate)  |> 
-  tbl_regression() |> 
+  tbl_regression(exponentiate=T) |> 
   modify_caption(caption = "Microfilarial load")
 ```
 
@@ -139,19 +138,19 @@ Use Poisson regression to obtain rate ratio estimates for microfilarial load adj
 tbl_age <- glm(disc2 ~ mfpermg + age + offset(log(pyrs)),
     family = poisson,
     data = ondrate)  |> 
-  tbl_regression() 
+  tbl_regression(exponentiate=T) 
 
 # Sex
 tbl_sex <- glm(disc2 ~ mfpermg+ sex + offset(log(pyrs)),
     family = poisson,
     data = ondrate)  |> 
-  tbl_regression() 
+  tbl_regression(exponentiate=T) 
 
 # Microfilarial load
 tbl_both <- glm(disc2 ~ mfpermg +sex+age+ offset(log(pyrs)),
     family = poisson,
     data = ondrate)  |> 
-  tbl_regression() 
+  tbl_regression(exponentiate=T) 
 
 
 tbl_merge(list(
@@ -166,17 +165,15 @@ tbl_merge(list(
 
 ::: {.callout-note collapse="true"}
 ## Answer
-Compared with the crude rate ratios, the age-adjusted rate ratios for MfL groups 1-9.99 and 10+ are somewhat reduced, indicating some confounding as expected (those with high MfL  tend to be older and at greater risk because of their older age).
 
-Adjusting for sex has little impact on the mf load rate ratios, indicating little or no confounding (again as expected – little difference in mf load between the sexes).
-Adjusting for sex in addition to age changes the mf load rate ratios only slightly. There is no evidence (Wald test p-value of 0.587) that sex is associated with OND.  
+Compared with the crude rate ratios, the age-adjusted rate ratios for MfL groups 1-9.99 and 10+ are somewhat reduced, indicating some confounding as expected (those with high MfL tend to be older and at greater risk because of their older age).
 
+Adjusting for sex has little impact on the mf load rate ratios, indicating little or no confounding (again as expected – little difference in mf load between the sexes). Adjusting for sex in addition to age changes the mf load rate ratios only slightly. There is no evidence (Wald test p-value of 0.587) that sex is associated with OND.
 :::
 
 # Q6
 
 Poisson regression models assume, unless you include interaction terms, that effects of different variables combine multiplicatively. Is there any evidence of an interaction between age and microfilarial load? Between sex and microfilarial load?
-
 
 Sex
 
@@ -190,9 +187,7 @@ tbl_w_int <- glm(disc2 ~ mfpermg*sex+ offset(log(pyrs)),
 lmtest::lrtest(tbl_no_int,tbl_w_int)
 ```
 
-
-Age 
-
+Age
 
 ```{r}
 tbl_no_int <- glm(disc2 ~ mfpermg +age+ offset(log(pyrs)),
@@ -204,7 +199,6 @@ tbl_w_int <- glm(disc2 ~ mfpermg*age+ offset(log(pyrs)),
 lmtest::lrtest(tbl_no_int,tbl_w_int)
 ```
 
-
 ::: {.callout-note collapse="true"}
 ## Answer
 
@@ -214,7 +208,6 @@ The likelihood ratio test for sex produces p=0.856, so there is no evidence of a
 # Q7
 
 Fitting the age variable included in the dataset as a factor introduces three parameters into the model. Would it be reasonable to treat the age variable as continuous and thus reduce the number of parameters in the model? How would you assess this?
-
 
 ```{r}
 tbl_ordinal <- glm(disc2 ~ as.numeric(age)+ offset(log(pyrs)),
@@ -233,9 +226,11 @@ The likelihood ratio test shows no evidence against (or in favor) of using age a
 :::
 
 # Q8
+
 Open whitehal.dta and use Poisson regression to repeat the analyses in question 11 of practical 5, i.e. examine the effect of job grade on CHD mortality adjusted for ageband and smoking status simultaneously. How does the result obtained from Poisson regression compare to that obtained using the stmh command?
 
 ::: {.callout-note collapse="true"}
 ## Answer
+
 Q11 of Session 6 already has it
 :::
