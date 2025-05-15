@@ -178,7 +178,7 @@ pyears(Surv(tstart, tstop,chd) ~ grade,
 
 Tabulate by agebands now
 
-```{r, results='asis'}
+```{r}
 pyears(Surv(tstart, tstop,chd) ~ ageband,
        data = white_split,
        scale=1) |> 
@@ -189,7 +189,7 @@ pyears(Surv(tstart, tstop,chd) ~ ageband,
 
 Calculate the ageband-specific RRs for Low grade versus High grade using stmh and assess whether the effect of grade is the same across all the strata. Is it necessary to report the stratum specific estimates? Do you think that age confounds the relationship between job grade and CHD mortality?
 
-```{r, results='asis'}
+```{r}
 pyears(Surv(tstart, tstop,chd) ~ ageband+grade,
        data = white_split,
        scale=1)|> 

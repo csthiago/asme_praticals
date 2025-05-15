@@ -15,3 +15,238 @@ execute:
 editor: visual
 ---
 
+Incomplete solutions (only question 1.2 and 1.3)
+
+```{r}
+library(haven) 
+# create table
+library(gtsummary)
+# data wrangling and other functions
+library(tidyverse)
+# if you want to have a output similar to stata
+library(tidylog)
+#imputation
+library(mice)
+
+# Limit significant digits to 4, remove scientific notation (most of the time, scipen=999 removes all time)
+options(digits = 4, scipen = 9)
+
+```
+
+# Q1.2
+
+How many observations are there in total in the data set (use dis N or browse the data)?
+
+
+```{r}
+melb <- haven::read_dta("datasets/NCDS_melbourne.dta")
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+There is `nrow(melb)` observations
+:::
+
+## How many observations are used in the complete case analysis?
+
+```{r}
+no_obs <- melb |> 
+  drop_na(noqual2,
+          care,
+          soch7,
+          invbwt,
+          mo_age) |> 
+  nrow()
+melb <- melb |> 
+    mutate(
+    care = as.factor(care),
+    soch7 = as.factor(soch7),
+    noqual2 = as.factor(noqual2),
+    invbwt = as.numeric(invbwt)
+  )
+complete_case_model <- glm(noqual2~ care + soch7 +invbwt+ mo_age, family="binomial",
+                           data=melb)
+tbl_complete <- tbl_regression(complete_case_model,
+               estimate_fun = purrr::partial(style_ratio, digits = 3)) |> 
+  modify_column_unhide(column = std.error)
+tbl_complete
+```
+
+::: {.callout-note collapse="true"}
+## Answer
+
+There is `no_obs` observations in complete case analysis
+:::
+
+## What percentage of records are incomplete?
+
+::: {.callout-note collapse="true"}
+## Answer
+
+There is `no_obs/nrow(melb)` observations are incomplete
+:::
+
+Under what assumption would inference from the complete records be valid? Do you believe this assumption?
+
+::: {.callout-note collapse="true"}
+## Answer
+
+The probability of a complete record is not associated with qualification status, given the covariates in the model. This may be plausible, since qualification status is observed at age 23. However, it is also possible that having data at age 23 may be related to educational qualifications, for example people with educational qualifications may be more likely to move away from home and drop out of the study.
+:::
+
+## Use observed data to investigate this assumption. Does the assumption hold?
+
+
+```{r}
+# Select the variables you want to impute/missing info (algo including the outcome even if there is no missing in the outcome)
+data.to.impute<- melb |> 
+  select(
+    noqual2,
+          care,
+          soch7,
+          invbwt,
+          mo_age
+  )
+md.pattern(data.to.impute, plot = T, rotate.names = T)
+
+dt_indicator <- data.to.impute |> 
+  mutate(
+    complete_case = if_else(
+      !is.na(noqual2) &
+        !is.na(soch7) &
+      !is.na(invbwt) &
+        !is.na(mo_age)&
+      !is.na(care),
+      0,
+      1
+    )
+  )
+mod_ind <- glm(complete_case ~ noqual2 + invbwt+mo_age, family = binomial, data=dt_indicator)
+
+tbl_regression(mod_ind)
+```
+
+## Can we determine the missingness mechanism from the dataset?
+
+::: {.callout-note collapse="true"}
+## Answer
+
+No, we have found evidence that missingness is associated with a number of the other variables in the dataset. We therefore have evidence against Missing Completely at Random (MCAR). However, we cannot from the observed data determine whether the values are Missing at Random (MAR) or Missing Not at Random (MNAR).
+
+Take note this regression is only taking into account the observations with non-missing in the variables included
+
+:::
+
+
+
+# Q 1.3
+
+We will now use R’s multiple imputation  In this example, we are going to impute missing values in more than one partially observed variable. Using the library mice (R has many other options to do MI). mice stands for Multivariate Imputation by Chained Equations
+
+```{r}
+
+glimpse(data.to.impute) # check the class of the variables ### Important
+
+```
+
+```{r}
+# Run a dry imp (no iteration) to get a predction matrix
+imp <- mice(data.to.impute, maxit=0)
+
+# Extract predictorMatrix and methods of imputation 
+
+predM <- imp$predictorMatrix
+meth <- imp$method
+
+# you can exclude a variable from the imputation model using this
+#predM[, c("invbwt")] <- 0
+# you can change the imputation method for each variable like this
+meth["invbwt"] <- "norm" #linear regression, the default value would be pmn -Predictive mean matching
+meth["mo_age"] <- "norm" #linear regression
+#  solution run 10 iterations and 15 datasets - usually you can get good results with 5 and 10 datasets and iterations (but it depends!)
+# you can reduce it to save computation time (in your practical)
+imp2 <- mice(data.to.impute, maxit = 10,  # equivalent to "burn"
+             m= 15, #number of datasets
+             predictorMatrix = predM, 
+             method = meth, print =  F,
+             seed = 123)
+```
+
+You can see there as lot of logged events all related to invbwt. All of them saying that the variable was removed from the imputation. 
+Lets see the impact it has
+
+```{r}
+#Then fit the model to each imputed data set:
+fit.ncds<-with(data=imp2,exp=glm(noqual2~ care + soch7 +invbwt+ mo_age, family="binomial"))
+#summary(pool(fit.ncds))
+tbl_imp <- tbl_regression(fit.ncds, estimate_fun = purrr::partial(style_ratio, digits = 3))|> 
+  modify_column_unhide(column = std.error)
+
+tbl_merge(
+  list(tbl_complete, tbl_imp),
+  tab_spanner = c("**Complete Case**","**Imputation**")
+)
+```
+
+
+As we can see, the INVBWT coefficient doesnt resemble the one from the complete case analysis, that is because the relationship between invbwt and the other variables was lost (because it was dropped)
+
+## Solution
+
+The probably reason of it not running is because the low variability of that variable, we can keep it but lets multiple by 100.
+
+```{r}
+data.to.impute<- melb |> 
+  select(
+    noqual2,
+          care,
+          soch7,
+          invbwt,
+          mo_age
+  ) |> 
+  mutate(
+    invbwt_100 = 100*invbwt
+  ) |> 
+  select(-invbwt) #remove original because collinear
+
+# Run a dry imp (no iteration) to get a predction matrix
+imp <- mice(data.to.impute, maxit=0)
+
+# Extract predictorMatrix and methods of imputation 
+
+predM <- imp$predictorMatrix
+meth <- imp$method
+
+# We will need to say to only use invbwt_100 in the imputation
+
+meth["mo_age"] <- "norm" #linear regression
+meth["invbwt_100"] <- "norm" #linear regression
+#  solution run 10 iterations and 15 datasets - usually you can get good results with 5 and 10 datasets and iterations (but it depends!)
+# you can reduce it to save computation time (in your practical)
+imp2 <- mice(data.to.impute, maxit = 10,  # equivalent to "burn"
+             m= 15, #number of datasets
+             predictorMatrix = predM, 
+             method = meth, print =  F,
+             seed = 123)
+
+```
+
+```{r}
+#Then fit the model to each imputed data set:
+complete_case_model <- glm(noqual2~ care + soch7 +invbwt_100+ mo_age, family="binomial",
+                           data=data.to.impute)
+tbl_complete <- tbl_regression(complete_case_model,
+               estimate_fun = purrr::partial(style_ratio, digits = 3)) |> 
+  modify_column_unhide(column = std.error)
+
+fit.ncds<-with(data=imp2,exp=glm(noqual2~ care + soch7 +invbwt_100+ mo_age, family="binomial"))
+#summary(pool(fit.ncds))
+tbl_imp <- tbl_regression(fit.ncds, estimate_fun = purrr::partial(style_ratio, digits = 3))|> 
+  modify_column_unhide(column = std.error)
+
+tbl_merge(
+  list(tbl_complete, tbl_imp),
+  tab_spanner = c("**Complete Case**","**Imputation**")
+)
+```

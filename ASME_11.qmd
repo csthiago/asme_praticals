@@ -244,10 +244,12 @@ dt_mzt |>
   geom_histogram(aes(fill=arm))
 ```
 
+
 ::: {.callout-tip collapse="true"}
 ## Coding explanation
 
-The `predict` takes a model and give the prediction using a new dataset. In the case of no "newdata" being declared, it will use the dataset used for fitting the model. The `type="response"` is related to give the prediction in the response scale, i.e., in the probability scale :::
+The `predict` takes a model and give the prediction using a new dataset. In the case of no "newdata" being declared, it will use the dataset used for fitting the model. The `type="response"` is related to give the prediction in the response scale, i.e., in the probability scale 
+:::
 
 (b) Now use collapse to sum up the observed and fitted values for each of the 12 communities:
 

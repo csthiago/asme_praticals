@@ -28,6 +28,7 @@ Suppose you wanted to explore the joint effect of npa with years of schooling (e
 ## Answer
 
 $$\log\left[ \frac { P( \operatorname{case} = \operatorname{1} ) }{ 1 - P( \operatorname{case} = \operatorname{1} ) } \right] = \alpha + \beta_{1}(\operatorname{npa})$$ $$\log\left[ \frac { P( \operatorname{case} = \operatorname{1} ) }{ 1 - P( \operatorname{case} = \operatorname{1} ) } \right] = \alpha + \beta_{1}(\operatorname{npa})+\beta_{2}(\operatorname{ed2})$$
+
 :::
 
 # Q2
@@ -294,9 +295,15 @@ glm(case ~ npa * age1,
 mwanza |> tbl_summary(include = c(age1), by = npa)
 ```
 
--   What is the problem and how can it be resolved? ::: {.callout-note collapse="true"} \## Answer
+-   What is the problem and how can it be resolved? 
 
-This problem arises because there are no cases in the highest sex partner group and the youngest age group. Sparse data (bias), other names is complete/quasi separation problem. :::
+::: {.callout-note collapse="true"} 
+
+## Answer
+
+This problem arises because there are no cases in the highest sex partner group and the youngest age group. Sparse data (bias), other names is complete/quasi separation problem. 
+
+:::
 
 ## 4b
 

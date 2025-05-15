@@ -16,14 +16,14 @@ editor: visual
 ---
 
 # Q1
-Paperwork question 
 
-Some notes:
-Additive scale in this practical can be seem as  "risk difference", while multiplicative as "risk ratio". Don't get confused with additive from "generalized additive models"
+Paperwork question
+
+Some notes: Additive scale in this practical can be seem as "risk difference", while multiplicative as "risk ratio". Don't get confused with additive from "generalized additive models"
 
 # Q2
 
-This question uses data from a retrospective cohort study conducted in southern Africa investigating the risk factors for tuberculosis (TB) among male gold miners (contained in goldmine.dta).  We want to examine the joint effect of HIV status (hiv coded 0 for negative and 1 for positive) and silicosis (silic coded 0 for none, 1 for possible, 2 for early, and 3 for advanced) on the incidence of TB (tb coded 0 for negative and 1 for positive).  Follow-up is assessed using entry and exit. 
+This question uses data from a retrospective cohort study conducted in southern Africa investigating the risk factors for tuberculosis (TB) among male gold miners (contained in goldmine.dta). We want to examine the joint effect of HIV status (hiv coded 0 for negative and 1 for positive) and silicosis (silic coded 0 for none, 1 for possible, 2 for early, and 3 for advanced) on the incidence of TB (tb coded 0 for negative and 1 for positive). Follow-up is assessed using entry and exit.
 
 ```{r}
 library(haven) 
@@ -43,20 +43,15 @@ options(digits = 4, scipen = 9)
 gold <- read_dta("datasets/GOLDMINE.DTA")|> 
   mutate(across(where(is.labelled),as_factor))
 ```
-**Outcome*:
- - `tb` (tubercolosis diagnosis, 0/1)
 
-**Exposures*:
- - `hiv` (HIV status at entry: 0/1)
- - `silic` (silicosis grad: 0 = "none", 1 = "possible", 2 = "early", 3 = "advanced")
- 
-**Time*:
- -`entry` (date of entry, formatted as number of days)
- -`exit` (date of exit, formatted as number of days)
- -`dob` (date of birth, formatted as number of days)
- 
- 
+\*\*Outcome\*: - `tb` (tubercolosis diagnosis, 0/1)
+
+\*\*Exposures\*: - `hiv` (HIV status at entry: 0/1) - `silic` (silicosis grad: 0 = "none", 1 = "possible", 2 = "early", 3 = "advanced")
+
+\*\*Time\*: -`entry` (date of entry, formatted as number of days) -`exit` (date of exit, formatted as number of days) -`dob` (date of birth, formatted as number of days)
+
 Create follow-up time (years) and drop missing data in silicosis
+
 ```{r}
 gold <- gold |> 
   mutate(silic = as.factor(silic)) |> 
@@ -66,7 +61,7 @@ gold_2 <- gold |>
   drop_na(silic)
 ```
 
-(i)	Use the strate and streg (or glm) commands to examine the crude effect of HIV status on TB.   
+(i) Use the strate and streg (or glm) commands to examine the crude effect of HIV status on TB.
 
 ```{r}
 mod1 <- glm(tb ~ hiv + offset(log(fup_y)) , data=gold_2, family=poisson)
@@ -78,8 +73,7 @@ tbl_merge(list(tbl1,tbl2),
 
 ```
 
-
-(iii)	Are there any biological reasons why you might expect the effects of HIV status and silicosis on TB incidence to combine multiplicatively or additively?
+(iii) Are there any biological reasons why you might expect the effects of HIV status and silicosis on TB incidence to combine multiplicatively or additively?
 
 ::: {.callout-note collapse="true"}
 ## Answer
@@ -87,8 +81,7 @@ tbl_merge(list(tbl1,tbl2),
 One might expect the effects of HIV and silicosis on TB to combine additively because they have two separate pathways leading to active tuberculosis: HIV tends to cause TB through immunosuppression, whereas silicosis causes TB through lung impairment caused by prolonged silica dust exposure.
 :::
 
-(iv)	Examine the joint effects of HIV status and silicosis on TB in a multiplicative Poisson model.  Is there evidence of an interaction on the multiplicative scale?  
-
+(iv) Examine the joint effects of HIV status and silicosis on TB in a multiplicative Poisson model. Is there evidence of an interaction on the multiplicative scale?
 
 ```{r}
 # gold_2_agg <- gold_2 |> 
@@ -109,18 +102,17 @@ tbl_merge(list(tbl1,tbl2),
 anova(mod3,mod31)
 ```
 
-
 ::: {.callout-note collapse="true"}
 ## Answer
-The LRT for interaction gives a p-value of 0.43, hence there is no evidence of an interaction on the multiplicative scale.  The adjusted RRs for HIV status and silicosis are given in the model above; both effects are strong after adjusting for one another.  We have no evidence to suggest that these effects do not combine multiplicatively, so there is an estimated 20-fold increase in the rate of developing TB among those HIV-positive who have advanced silicosis compared to those HIV-negative without silicosis (RR=4.82x4.12=19.86).
+
+The LRT for interaction gives a p-value of 0.43, hence there is no evidence of an interaction on the multiplicative scale. The adjusted RRs for HIV status and silicosis are given in the model above; both effects are strong after adjusting for one another. We have no evidence to suggest that these effects do not combine multiplicatively, so there is an estimated 20-fold increase in the rate of developing TB among those HIV-positive who have advanced silicosis compared to those HIV-negative without silicosis (RR=4.82x4.12=19.86).
 :::
 
 ::: {.callout-tip collapse="true"}
 ## Coding explanation
 
-The code in Stata first aggregate the dataset, it is not strictly necessary. 
+The code in Stata first aggregate the dataset, it is not strictly necessary.
 :::
-
 
 ```{r}
 cat("Expected/Observed number of TB cases")
@@ -137,9 +129,9 @@ gold_2 |>
 
 For all covariates, the observed number of TB events is similar to the expected number under the multiplicative model.
 
-(v)	Examine the joint effects of HIV infection and silicosis on TB in an additive rate model. Is there evidence of an interaction on the additive scale?  
+(v) Examine the joint effects of HIV infection and silicosis on TB in an additive rate model. Is there evidence of an interaction on the additive scale?
 
-The answer to part (iv) suggests that the multiplicative model is appropriate and we could stop here. There is no evidence of an interaction on the multiplicative scale and for two out of the three categories of silicosis, the interaction was positive rather than negative.  Hence, there is no statistical evidence to suggest additive effects.  Let’s try fitting the additive model anyway, on the grounds that it is biologically plausible.
+The answer to part (iv) suggests that the multiplicative model is appropriate and we could stop here. There is no evidence of an interaction on the multiplicative scale and for two out of the three categories of silicosis, the interaction was positive rather than negative. Hence, there is no statistical evidence to suggest additive effects. Let’s try fitting the additive model anyway, on the grounds that it is biologically plausible.
 
 ```{r}
 # Create rate variable
@@ -155,13 +147,11 @@ mod41 <- glm(rate ~hiv*silic , data=gold_2, family=poisson(link="identity"),
 anova(mod4,mod41)
 ```
 
-
 ::: {.callout-note collapse="true"}
 ## Answer
-The LRT is given by 16.82 [2*(-955.979- -964.390)] which is a chi-square with 3 df, giving p=0.0008 and so there is strong evidence of interaction on the additive scale.  Note that all three interaction terms are positive and the “main effects” are also positive (so all RRs>1), suggesting that the effects are more than additive (likely multiplicative).
+
+The LRT is given by 16.82 \[2\*(-955.979- -964.390)\] which is a chi-square with 3 df, giving p=0.0008 and so there is strong evidence of interaction on the additive scale. Note that all three interaction terms are positive and the “main effects” are also positive (so all RRs\>1), suggesting that the effects are more than additive (likely multiplicative).
 :::
-
-
 
 ```{r}
 # tbl_regression(mod3, exponentiate=T)
@@ -175,12 +165,8 @@ gold_2 |>
             predicted= sum(predicted_cases*fup_y))
 ```
 
-
 ::: {.callout-note collapse="true"}
 ## Answer
 
-For some covariates, the observed number of TB events differs markedly from the expected number under the additive model.  In summary, the strong evidence for an interaction (p=0.0008) and the discrepancies between the observed and expected values for the additive model suggest that the effects of HIV and silicosis do not combine additively.
+For some covariates, the observed number of TB events differs markedly from the expected number under the additive model. In summary, the strong evidence for an interaction (p=0.0008) and the discrepancies between the observed and expected values for the additive model suggest that the effects of HIV and silicosis do not combine additively.
 :::
-
-
-
