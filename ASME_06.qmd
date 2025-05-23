@@ -44,7 +44,7 @@ whitehall <- read_stata("datasets/WHITEHAL.DTA")
 whitehall <- whitehall |> 
   mutate(
     id = as.integer(id),
-    all = as.integer(all), # NB outcomes must remain numerical
+    all = as.integer(all), # better keep numeric (not a problem in this case)
     chd = as.integer(chd),
     grade4 = case_when( # recoding as character using case_when, most models will recognize characters as factors with some exemptions (mgcv doesnt)
       grade4 == 1 ~ "admin",
@@ -74,9 +74,11 @@ Compute the rates for the two grades of employment categories using the commands
 
 ```{r, results='asis'}
 # Calculate rates
-pyears(Surv(time = as.numeric(timein), 
-                                 time2 = as.numeric(timeout), 
-                                 event = chd) ~ grade, data = whitehall, scale = 1) %>%
+pyears(Surv(
+  time = as.numeric(timein),
+  time2 = as.numeric(timeout),
+  event = chd
+) ~ grade, data = whitehall, scale = 1) |>
   summary(n = F, rate = T, ci.r = T, scale = 1000)
 ```
 
@@ -84,9 +86,11 @@ pyears(Surv(time = as.numeric(timein),
 
 ```{r, results='asis'}
 # Calculate rates
-pyears(Surv(time = as.numeric(timein), 
-                                 time2 = as.numeric(timeout), 
-                                 event = chd) ~ grade, data = whitehall) %>%
+pyears(Surv(
+  time = as.numeric(timein),
+  time2 = as.numeric(timeout),
+  event = chd
+) ~ grade, data = whitehall) |>
   summary(n = F, rate = T, ci.r = T, scale = 1000)
 ```
 
@@ -116,19 +120,22 @@ Now, set again the time and outcome variables with stset but this time, use the 
 
 ```{r, results='asis'}
 # Calculate rates
-pyears(Surv(time = as.numeric(timein), 
-                                 time2 = as.numeric(timeout), 
-            origin = as.numeric(timebth),
-                                 event = chd) ~ grade, data = whitehall) %>%
+pyears(Surv(
+  time = as.numeric(timein),
+  time2 = as.numeric(timeout),
+  origin = as.numeric(timebth),
+  event = chd
+) ~ grade, data = whitehall) |> 
   summary(n = F, rate = T, ci.r = T, scale = 1000)
 ```
 
 ```{r}
 # I dont know any easy alternative to see the summary (similar to STATA)
-summary(Surv(as.numeric(whitehall$timein)/365.25, 
-     as.numeric(whitehall$timeout)/365.25,
-     origin = as.numeric(whitehall$timebth)/365.25,
-     whitehall$chd))
+summary(Surv(as.numeric(whitehall$timein) / 365.25,
+  as.numeric(whitehall$timeout) / 365.25,
+  origin = as.numeric(whitehall$timebth) / 365.25,
+  whitehall$chd
+))
 ```
 
 # Q4, Q5 and Q6
@@ -230,6 +237,22 @@ mod_int <-  glm(event ~ grade*ageband + offset(log(pyears)),
 tbl_regression(mod1,exponentiate = T)
 
 ```
+
+::: {.callout-tip collapse="true"}
+## Explanation - Offset
+
+The Poisson regression usually is used for model count data, but we can also model rates with it. To do that, we need to transform the count in rates, and the offset variable will inform us about the "size" of exposure of each individual/unit. The regression coefficient for an offset variable is constrained to be 1, thus allowing our model to represent rates rather than counts. When you fit a model with an offset, the exponentiated regression coefficient of a predictor variable tells us how much the expected rate changes multiplicatively for a one unit increase in the predictor variable. When using an offset, the assumption is made that doubling the unit size (measurement time, etc.) will lead to a doubling of the count outcome. If this assumption is not appropriate, controlling for the unit size as a covariate instead of an offset may be more appropriate. A likelihood ratio test could be used to determine if the fit of these two models is significantly different.
+
+Why the offset is in log? Consider the rate $\lambda$
+
+$$\lambda=\frac{\mu_{i}}{t_{i}}$$
+
+$$ log(\lambda)=\alpha +\beta x $$
+
+The model will be $$ log(\mu)-log(t)=\alpha +\beta x $$
+
+$$ log(\mu)=\alpha +\beta x +log(t) $$
+:::
 
 Check interaction
 

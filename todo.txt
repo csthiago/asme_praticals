@@ -1,4 +1,3 @@
-descrever o que é offset
 colocar os enunacidos das questions Ses 6
 fix q5 ses 8
 fix coding smoker q8
