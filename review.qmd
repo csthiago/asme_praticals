@@ -174,16 +174,19 @@ parameters::model_parameters(model_inc,
 
 ## Using GEE
 
-Using `geepack` package (or `gee`), because geepack
+Using `geepack` package (or `gee`). Using a independence correlation matrix (same answer from the Poisson with cluster SE).
 
 ```{r}
+library(geepack)
 # make sure the dataset is ordered by id
 papua_inc <- papua_inc |> 
   arrange(id)
-   gee_inc <- geepack::geeglm(any ~ 1+offset(log(pyears)),
+  gee_inc <- geepack::geeglm(any ~ 1+offset(log(pyears)),
                        id = id,
+                       corstr = "independence",
              family = poisson,
              data = papua_inc)
+
   parameters::model_parameters(gee_inc, exponentiate=T) 
 ```
 
