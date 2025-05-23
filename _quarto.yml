@@ -25,6 +25,7 @@ website:
       - href: index.qmd
         text: Home
       - about.qmd
+      - review.qmd
 
 format:
   html:

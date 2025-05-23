@@ -1,0 +1,217 @@
+---
+title: "Additional Topics"
+author: "Thiago Cerqueira Silva"
+format: 
+  html: 
+    toc: true
+    toc-location: right
+    self-contained: true
+    df-print: kable
+execute: 
+  warning: false
+  message: false
+editor: visual
+sidebar: home
+---
+
+This document cover some additional data wrangling steps need to do something in R, when compared to STATA
+
+```{r}
+
+
+library(haven) 
+# create table
+library(gtsummary)
+# data wrangling and other functions
+library(tidyverse)
+# if you want to have a output similar to stata
+library(tidylog)
+#cox
+library(survival)
+# plots survival
+library(ggsurvfit)
+# Epi - additional splitting
+library(Epi)
+# Limit significant digits to 2, remove scientific notation
+options(digits = 3, scipen = 9)
+papua_raw <- read_dta("datasets/pngnew.dta") |> 
+  mutate(across(where(is.labelled),as_factor))
+```
+
+# Splitting in multiple time scales
+
+In R, it is very easy to split data in one time scale using `survival` package. However, to do a split in multiple time scales using survival is more complicated. It has a simple way using Epi package.
+
+## Epi
+
+Let's see how to do it using `Epi` (easy way)
+
+```{r}
+# Lets define a object with all time variables as numeric
+papua_epi <- papua_raw |> 
+  mutate(
+    timein_calyear = cal.yr(timein, format="%Y-%m-%d"),
+    timeout_calyear = cal.yr(timeout, format ="%Y-%m-%d"),
+    dob_calyear = cal.yr(dob, format = "%Y-%m-%d")
+  )
+# Define as Lexis object with timescales calendar time and age
+lexis_exp <- Lexis(entry = list( period=timein_calyear ),
+               exit = list( period=timeout_calyear, age=timeout_calyear-dob_calyear),
+               exit.status = any,
+               data = papua_epi)
+
+# example of splitting
+# now you can split by different cutoffs in each timescale
+# Split time along two time-axes
+lexis_split_per <- splitLexis( lexis_exp, breaks = c(1983), time.scale="period")
+lexis_split_per_age<- splitLexis( lexis_split_per, breaks = c(3,6), time.scale="age" )
+lexis_split_per_age |> as_tibble() |> head()
+```
+
+::: {.callout-tip collapse="false"}
+## Coding explanation
+
+This new dataset has the columns period, age, lex.dur, lex.cst and lex.xst - these are the variables that are updated through the process.
+
+`period` is the calendar period
+
+`age` is the age
+
+`lex.dur` is the pyears in that period
+
+`lex.Cst` is the status (enter) of the individual in that period
+
+`lex.Xst` is the status (exit) of the individual in that period
+:::
+
+
+## survival
+
+Let's see how to do it using `survival`
+
+```{r}
+# Lets define a object with only one entry per person
+z_int <- papua_raw |> 
+  group_by(id) |> 
+  summarise(entry = (min(timein)),
+            exit = (max(timeout)),
+            dob = unique(dob),
+            timestudy = exit-entry)
+z <- tmerge(z_int,z_int,id=id, tstart=entry,
+            tstop=exit)
+
+z <- tmerge(z,
+            papua_raw,
+            id = id,
+            event_end = event(timeout, any))
+# now you need to break by calendar
+breaks_cal <- c(as.Date("1983-01-01"))
+
+for (i in 1:length(breaks_cal) ){
+  t <- breaks_cal[i]
+  z_df <- z_int  |>  mutate(period_end_date = t)
+  z <- tmerge(z,z_df, id=id, per1=tdc(period_end_date))
+  names(z)[names(z)=="per1"] <- paste0("p_",i)
+}
+
+
+# now you need to break by calendar
+breaks_age <- c(3*365.25,6*365.25)
+
+for (i in 1:length(breaks_age) ){
+  t <- breaks_age[i]
+  z_df <- z_int  |>  mutate(age_end_date = dob + t)
+  z <- tmerge(z,z_df, id=id, per1=tdc(age_end_date))
+  names(z)[names(z)=="per1"] <- paste0("age_",i)
+}
+z |> dplyr::select(id,tstart, tstop,dob, event_end) |>
+  mutate(
+    age = as.numeric(tstart - dob)/365.25,
+    pyrs = as.numeric(tstop - tstart)/365.25) |> 
+  as_tibble() |> head()
+```
+
+You can see it match the output from `Epi`.
+
+
+# Calculate Overall Incidence Rate
+
+## Using cluster SE
+
+Let's see how to calculate an overall incidence rate when the data is clustered.
+
+```{r}
+papua_inc <- papua_raw |> 
+  mutate(pyears = as.numeric((timeout-timein))/365.25) #using in years to match the common pattern in the stset scale=365.25
+```
+
+We can calculate this using a Poisson Model (valid point estimate) and using a cluster standard error (it's different than "robust standard error" alone)
+
+```{r}
+model_inc <- glm(any ~ 1+offset(log(pyears)),
+             family = poisson,
+             data = papua_inc)
+parameters::model_parameters(model_inc,  
+                             vcov = "vcovCL",
+                             vcov_args = list(cluster = papua_inc$id),
+                             exponentiate=T)
+```
+
+Check the difference without cluster SE
+
+```{r}
+parameters::model_parameters(model_inc,
+                             exponentiate=T)
+```
+
+and now robust SE
+
+```{r}
+parameters::model_parameters(model_inc,  
+                             vcov = "HC0",
+                             exponentiate=T)
+```
+
+## Using GEE
+
+Using `geepack` package (or `gee`), because geepack
+
+```{r}
+# make sure the dataset is ordered by id
+papua_inc <- papua_inc |> 
+  arrange(id)
+   gee_inc <- geepack::geeglm(any ~ 1+offset(log(pyears)),
+                       id = id,
+             family = poisson,
+             data = papua_inc)
+  parameters::model_parameters(gee_inc, exponentiate=T) 
+```
+
+## Warning - Random Effects model and Intercept
+
+Remember from the class about Analysis of correlated outcome that a RE model is a "conditional" model. So the simple model with a intercept + random intercept will have a "conditional" interpretation, i.e., the fixed effect intercept depends on the RE intercept.
+
+```{r}
+library(lme4)
+re_inc <- glmer(any ~ 1+offset(log(pyears)) + (1|id),
+                    data = papua_inc,
+                    family = "poisson")
+parameters::model_parameters(re_inc, exponentiate=T) 
+```
+
+```{r}
+# 1a. Fixed‐intercept estimate (conditional on random effect = 0)
+beta0 <- fixef(re_inc)[1]
+
+# 1b. Random‐intercept variance
+sigma2 <- as.data.frame(VarCorr(re_inc))$vcov[1]
+
+# 2. Incidence‐rate estimates
+# • Cluster‐specific (conditional) IR  = exp(beta0)
+IR_cond   <- exp(beta0)
+# • Marginal (population‐average) IR ≈ exp(beta0 + σ2/2)
+IR_marg   <- exp(beta0 + sigma2/2)
+
+```
+
+If we accounted for the values from the Random effects intercept, we can get a incidence rate of `r IR_marg`
